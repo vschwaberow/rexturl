@@ -45,7 +45,7 @@ fn check_for_stdin() {
 
 fn print_help() {
     print_prg_info();
-    println!("Usage: urlparse [options] [url]");
+    println!("Usage: rexturl [options] [url]");
     println!("Options:");
     println!("  -s, --scheme     print the scheme");
     println!("  -u, --username   print the username");
