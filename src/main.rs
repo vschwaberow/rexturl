@@ -149,21 +149,21 @@ fn main() {
 
         if c.scheme {
             let scheme = url.scheme();
-            e.push(format!("{}", scheme));
+            e.push(scheme.to_string());
             continue;
         } else if c.username {
             let username = url.username();
             match username {
                 "" => (),
                 _ => {
-                    e.push(format!("{}", username));
+                    e.push(username.to_string());
                 }
             }
         } else if c.host {
             let host = url.host();
             match host {
                 Some(host) => {
-                    e.push(format!("{}", host));
+                    e.push(host.to_string());
                 }
                 None => continue,
             }
@@ -171,18 +171,18 @@ fn main() {
             let port = url.port();
             match port {
                 Some(port) => {
-                    e.push(format!("{}", port));
+                    e.push(port.to_string());
                 }
                 None => continue,
             }
         } else if c.path {
             let path = url.path();
-            e.push(format!("{}", path));
+            e.push(path.to_string());
         } else if c.query {
             let query = url.query();
             match query {
                 Some(query) => {
-                    e.push(format!("{}", query));
+                    e.push(query.to_string());
                 }
                 None => continue,
             }
@@ -190,12 +190,12 @@ fn main() {
             let frag = url.fragment();
             match frag {
                 Some(frag) => {
-                    e.push(format!("{}", frag));
+                    e.push(frag.to_string());
                 }
                 None => continue,
             }
         } else if c.all {
-            println!("{}", url);
+            e.push(url.to_string());
         } else {
             println!("Error: No option selected");
             std::process::exit(1);
