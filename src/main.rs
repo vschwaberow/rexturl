@@ -19,11 +19,11 @@ Author(s): Volker Schwaberow
 */
 
 use atty::Stream;
-use std::env;
-use url::Url;
 use std::cell::RefCell;
+use std::env;
 use std::io::{self, BufRead};
 use std::rc::Rc;
+use url::Url;
 
 #[derive(Debug)]
 struct Config {
@@ -34,6 +34,8 @@ struct Config {
     path: bool,
     query: bool,
     fragment: bool,
+    vec_sort: bool,
+    vec_unique: bool,
     all: bool,
 }
 
@@ -72,7 +74,6 @@ fn print_prg_info() {
 }
 
 fn main() {
-
     let config = Config {
         scheme: false,
         username: false,
@@ -81,30 +82,58 @@ fn main() {
         path: false,
         query: false,
         fragment: false,
+        vec_unique: false,
+        vec_sort: false,
         all: false,
     };
 
     let config_sptr = Rc::new(RefCell::new(config));
-    
+
     check_for_stdin();
-    
+
     let stdin = io::stdin();
     let args: Vec<String> = env::args().collect();
     for arg in args.iter() {
         let mut c = RefCell::borrow_mut(&config_sptr);
         match arg.as_str() {
-            "-s" | "--scheme"=> { c.scheme = true;},
-            "-u" | "--username" => { c.username = true; },
-            "-H" | "--host" => { c.host = true; },
-            "-p" | "--port" => { c.port = true; },
-            "-P" | "--path" => { c.path = true; },
-            "-q" | "--query" => { c.query = true; },
-            "-f" | "--fragment" => { c.fragment = true; },
-            "-a" | "--all" => { c.all = true; },
-            "-h" | "--help" => { print_help(); },
+            "-s" | "--scheme" => {
+                c.scheme = true;
+            }
+            "-u" | "--username" => {
+                c.username = true;
+            }
+            "-H" | "--host" => {
+                c.host = true;
+            }
+            "-p" | "--port" => {
+                c.port = true;
+            }
+            "-P" | "--path" => {
+                c.path = true;
+            }
+            "-q" | "--query" => {
+                c.query = true;
+            }
+            "-f" | "--fragment" => {
+                c.fragment = true;
+            }
+            "-S" | "--sort" => {
+                c.vec_sort = true;
+            }
+            "-U" | "--unique" => {
+                c.vec_unique = true;
+            }
+            "-a" | "--all" => {
+                c.all = true;
+            }
+            "-h" | "--help" => {
+                print_help();
+            }
             _ => (),
         }
     }
+
+    let res_vec: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
 
     for line in stdin.lock().lines() {
         let line = line.unwrap();
@@ -116,51 +145,72 @@ fn main() {
         let url = url.unwrap();
 
         let c = config_sptr.borrow();
+        let mut e = RefCell::borrow_mut(&res_vec);
 
         if c.scheme {
             let scheme = url.scheme();
-            println!("{}", scheme);
-            continue; 
+            e.push(scheme.to_string());
+            continue;
         } else if c.username {
             let username = url.username();
             match username {
                 "" => (),
-                _ => println!("{}", username),
+                _ => {
+                    e.push(username.to_string());
+                }
             }
         } else if c.host {
             let host = url.host();
             match host {
-                Some(host) => println!("{}", host),
-                None => println!("No hostname"),
+                Some(host) => {
+                    e.push(host.to_string());
+                }
+                None => continue,
             }
         } else if c.port {
             let port = url.port();
             match port {
-                Some(port) => println!("{}", port),
-                None => println!("No port"),
+                Some(port) => {
+                    e.push(port.to_string());
+                }
+                None => continue,
             }
         } else if c.path {
             let path = url.path();
-            println!("{}", path);
-        } else if c.query { 
+            e.push(path.to_string());
+        } else if c.query {
             let query = url.query();
             match query {
-                Some(query) => println!("{}", query),
-                None => println!("No query"),
+                Some(query) => {
+                    e.push(query.to_string());
+                }
+                None => continue,
             }
         } else if c.fragment {
             let frag = url.fragment();
             match frag {
-                Some(frag) => println!("{}", frag),
-                None => println!("No fragment"),
+                Some(frag) => {
+                    e.push(frag.to_string());
+                }
+                None => continue,
             }
         } else if c.all {
-            println!("{}", url);
+            e.push(url.to_string());
         } else {
             println!("Error: No option selected");
             std::process::exit(1);
-            
         }
     }
 
+    if config_sptr.borrow().vec_sort {
+        res_vec.borrow_mut().sort();
+    }
+
+    if config_sptr.borrow().vec_unique {
+        res_vec.borrow_mut().dedup();
+    }
+
+    for e in res_vec.borrow().iter() {
+        println!("{}", e);
+    }
 }
