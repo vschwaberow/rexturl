@@ -117,21 +117,21 @@ fn main() {
 
         if c.scheme {
             let scheme = url.scheme();
-            println!("Scheme: {}", scheme);
+            println!("{}", scheme);
             continue; 
         } else if c.username {
             let username = url.username();
-            println!("Username: {}", username);
+            println!("{}", username);
         } else if c.host {
             let host = url.host();
             match host {
-                Some(host) => println!("Host: {}", host),
+                Some(host) => println!("{}", host),
                 None => println!("No hostname"),
             }
         } else if c.port {
             let port = url.port();
             match port {
-                Some(port) => println!("Port: {}", port),
+                Some(port) => println!("{}", port),
                 None => println!("No port"),
             }
         } else if c.path {
@@ -140,13 +140,13 @@ fn main() {
         } else if c.query { 
             let query = url.query();
             match query {
-                Some(query) => println!("Query: {}", query),
+                Some(query) => println!("{}", query),
                 None => println!("No query"),
             }
         } else if c.fragment {
             let frag = url.fragment();
             match frag {
-                Some(frag) => println!("Fragment: {}", frag),
+                Some(frag) => println!("{}", frag),
                 None => println!("No fragment"),
             }
         } else if c.all {
