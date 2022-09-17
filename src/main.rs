@@ -66,7 +66,7 @@ fn print_prg_info() {
     let prg_description = format!("{}", env!("CARGO_PKG_DESCRIPTION"));
     println!("{} {}", prg_info, prg_authors);
     println!("{}", prg_description);
-    println!("");
+    println!();
 }
 
 fn main() {
