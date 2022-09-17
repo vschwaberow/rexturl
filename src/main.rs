@@ -39,6 +39,8 @@ struct Config {
 
 fn check_for_stdin() {
     if atty::is(Stream::Stdin) {
+        println!("Error: Not in stdin mode - switches ignored.");
+        println!();
         print_help();
         std::process::exit(0);
     }
@@ -121,7 +123,10 @@ fn main() {
             continue; 
         } else if c.username {
             let username = url.username();
-            println!("{}", username);
+            match username {
+                "" => (),
+                _ => println!("{}", username),
+            }
         } else if c.host {
             let host = url.host();
             match host {
@@ -136,7 +141,7 @@ fn main() {
             }
         } else if c.path {
             let path = url.path();
-            println!("Path: {}", path);
+            println!("{}", path);
         } else if c.query { 
             let query = url.query();
             match query {
