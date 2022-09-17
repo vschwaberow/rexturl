@@ -39,6 +39,8 @@ struct Config {
 
 fn check_for_stdin() {
     if atty::is(Stream::Stdin) {
+        println!("Error: Not in stdin mode - switches ignored.");
+        println!();
         print_help();
         std::process::exit(0);
     }
@@ -62,11 +64,11 @@ fn print_help() {
 
 fn print_prg_info() {
     let prg_info = format!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-    let prg_authors = format!("(c) 2022 by {}", env!("CARGO_PKG_AUTHORS"));
-    let prg_description = format!("{}", env!("CARGO_PKG_DESCRIPTION"));
+    let prg_authors = env!("CARGO_PKG_AUTHORS").to_string();
+    let prg_description = env!("CARGO_PKG_DESCRIPTION").to_string();
     println!("{} {}", prg_info, prg_authors);
     println!("{}", prg_description);
-    println!("");
+    println!();
 }
 
 fn main() {
@@ -121,7 +123,10 @@ fn main() {
             continue; 
         } else if c.username {
             let username = url.username();
-            println!("{}", username);
+            match username {
+                "" => (),
+                _ => println!("{}", username),
+            }
         } else if c.host {
             let host = url.host();
             match host {
@@ -136,7 +141,7 @@ fn main() {
             }
         } else if c.path {
             let path = url.path();
-            println!("Path: {}", path);
+            println!("{}", path);
         } else if c.query { 
             let query = url.query();
             match query {
