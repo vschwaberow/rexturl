@@ -34,6 +34,7 @@ struct Config {
     path: bool,
     query: bool,
     fragment: bool,
+    all: bool,
 }
 
 fn check_for_stdin() {
@@ -78,6 +79,7 @@ fn main() {
         path: false,
         query: false,
         fragment: false,
+        all: false,
     };
 
     let config_sptr = Rc::new(RefCell::new(config));
@@ -89,22 +91,15 @@ fn main() {
     for arg in args.iter() {
         let mut c = RefCell::borrow_mut(&config_sptr);
         match arg.as_str() {
-            "-s" => { c.scheme = true;},
-            "--scheme" => { c.scheme = true;},
-            "-u" => { c.username = true; },
-            "--username" => { c.username = true; },
-            "-H" => { c.host = true; },
-            "--host" => { c.host = true; },
-            "-p" => { c.port = true; },
-            "--port" => { c.port = true; },
-            "-P" => { c.path = true; },
-            "--path" => { c.path = true; },
-            "-q" => { c.query = true; },
-            "--query" => { c.query = true; },
-            "-f" => { c.fragment = true; },
-            "--fragment" => { c.fragment = true; },
-            "-h" => { print_help(); },
-            "--help" => { print_help(); },
+            "-s" | "--scheme"=> { c.scheme = true;},
+            "-u" | "--username" => { c.username = true; },
+            "-H" | "--host" => { c.host = true; },
+            "-p" | "--port" => { c.port = true; },
+            "-P" | "--path" => { c.path = true; },
+            "-q" | "--query" => { c.query = true; },
+            "-f" | "--fragment" => { c.fragment = true; },
+            "-a" | "--all" => { c.all = true; },
+            "-h" | "--help" => { print_help(); },
             _ => (),
         }
     }
@@ -122,21 +117,21 @@ fn main() {
 
         if c.scheme {
             let scheme = url.scheme();
-            println!("Scheme: {}", scheme);
+            println!("{}", scheme);
             continue; 
         } else if c.username {
             let username = url.username();
-            println!("Username: {}", username);
+            println!("{}", username);
         } else if c.host {
             let host = url.host();
             match host {
-                Some(host) => println!("Host: {}", host),
+                Some(host) => println!("{}", host),
                 None => println!("No hostname"),
             }
         } else if c.port {
             let port = url.port();
             match port {
-                Some(port) => println!("Port: {}", port),
+                Some(port) => println!("{}", port),
                 None => println!("No port"),
             }
         } else if c.path {
@@ -145,15 +140,17 @@ fn main() {
         } else if c.query { 
             let query = url.query();
             match query {
-                Some(query) => println!("Query: {}", query),
+                Some(query) => println!("{}", query),
                 None => println!("No query"),
             }
         } else if c.fragment {
             let frag = url.fragment();
             match frag {
-                Some(frag) => println!("Fragment: {}", frag),
+                Some(frag) => println!("{}", frag),
                 None => println!("No fragment"),
             }
+        } else if c.all {
+            println!("{}", url);
         } else {
             println!("Error: No option selected");
             std::process::exit(1);
