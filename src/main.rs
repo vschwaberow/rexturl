@@ -34,6 +34,7 @@ struct Config {
     path: bool,
     query: bool,
     fragment: bool,
+    all: bool,
 }
 
 fn check_for_stdin() {
@@ -78,6 +79,7 @@ fn main() {
         path: false,
         query: false,
         fragment: false,
+        all: false,
     };
 
     let config_sptr = Rc::new(RefCell::new(config));
@@ -96,6 +98,7 @@ fn main() {
             "-P" | "--path" => { c.path = true; },
             "-q" | "--query" => { c.query = true; },
             "-f" | "--fragment" => { c.fragment = true; },
+            "-a" | "--all" => { c.all = true; },
             "-h" | "--help" => { print_help(); },
             _ => (),
         }
@@ -146,6 +149,8 @@ fn main() {
                 Some(frag) => println!("Fragment: {}", frag),
                 None => println!("No fragment"),
             }
+        } else if c.all {
+            println!("{}", url);
         } else {
             println!("Error: No option selected");
             std::process::exit(1);
