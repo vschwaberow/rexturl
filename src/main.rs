@@ -62,8 +62,8 @@ fn print_help() {
 
 fn print_prg_info() {
     let prg_info = format!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-    let prg_authors = format!("(c) 2022 by {}", env!("CARGO_PKG_AUTHORS"));
-    let prg_description = format!("{}", env!("CARGO_PKG_DESCRIPTION"));
+    let prg_authors = env!("CARGO_PKG_AUTHORS").to_string();
+    let prg_description = env!("CARGO_PKG_DESCRIPTION").to_string();
     println!("{} {}", prg_info, prg_authors);
     println!("{}", prg_description);
     println!();
