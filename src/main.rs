@@ -89,22 +89,14 @@ fn main() {
     for arg in args.iter() {
         let mut c = RefCell::borrow_mut(&config_sptr);
         match arg.as_str() {
-            "-s" => { c.scheme = true;},
-            "--scheme" => { c.scheme = true;},
-            "-u" => { c.username = true; },
-            "--username" => { c.username = true; },
-            "-H" => { c.host = true; },
-            "--host" => { c.host = true; },
-            "-p" => { c.port = true; },
-            "--port" => { c.port = true; },
-            "-P" => { c.path = true; },
-            "--path" => { c.path = true; },
-            "-q" => { c.query = true; },
-            "--query" => { c.query = true; },
-            "-f" => { c.fragment = true; },
-            "--fragment" => { c.fragment = true; },
-            "-h" => { print_help(); },
-            "--help" => { print_help(); },
+            "-s" | "--scheme"=> { c.scheme = true;},
+            "-u" | "--username" => { c.username = true; },
+            "-H" | "--host" => { c.host = true; },
+            "-p" | "--port" => { c.port = true; },
+            "-P" | "--path" => { c.path = true; },
+            "-q" | "--query" => { c.query = true; },
+            "-f" | "--fragment" => { c.fragment = true; },
+            "-h" | "--help" => { print_help(); },
             _ => (),
         }
     }
