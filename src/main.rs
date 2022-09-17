@@ -19,11 +19,11 @@ Author(s): Volker Schwaberow
 */
 
 use atty::Stream;
-use std::env;
-use url::Url;
 use std::cell::RefCell;
+use std::env;
 use std::io::{self, BufRead};
 use std::rc::Rc;
+use url::Url;
 
 #[derive(Debug)]
 struct Config {
@@ -74,7 +74,6 @@ fn print_prg_info() {
 }
 
 fn main() {
-
     let config = Config {
         scheme: false,
         username: false,
@@ -89,25 +88,47 @@ fn main() {
     };
 
     let config_sptr = Rc::new(RefCell::new(config));
-    
+
     check_for_stdin();
-    
+
     let stdin = io::stdin();
     let args: Vec<String> = env::args().collect();
     for arg in args.iter() {
         let mut c = RefCell::borrow_mut(&config_sptr);
         match arg.as_str() {
-            "-s" | "--scheme"=> { c.scheme = true;},
-            "-u" | "--username" => { c.username = true; },
-            "-H" | "--host" => { c.host = true; },
-            "-p" | "--port" => { c.port = true; },
-            "-P" | "--path" => { c.path = true; },
-            "-q" | "--query" => { c.query = true; },
-            "-f" | "--fragment" => { c.fragment = true; },
-            "-S" | "--sort" => { c.vec_sort = true; },
-            "-U" | "--unique" => { c.vec_unique = true; },
-            "-a" | "--all" => { c.all = true; },
-            "-h" | "--help" => { print_help(); },
+            "-s" | "--scheme" => {
+                c.scheme = true;
+            }
+            "-u" | "--username" => {
+                c.username = true;
+            }
+            "-H" | "--host" => {
+                c.host = true;
+            }
+            "-p" | "--port" => {
+                c.port = true;
+            }
+            "-P" | "--path" => {
+                c.path = true;
+            }
+            "-q" | "--query" => {
+                c.query = true;
+            }
+            "-f" | "--fragment" => {
+                c.fragment = true;
+            }
+            "-S" | "--sort" => {
+                c.vec_sort = true;
+            }
+            "-U" | "--unique" => {
+                c.vec_unique = true;
+            }
+            "-a" | "--all" => {
+                c.all = true;
+            }
+            "-h" | "--help" => {
+                print_help();
+            }
             _ => (),
         }
     }
@@ -129,38 +150,48 @@ fn main() {
         if c.scheme {
             let scheme = url.scheme();
             e.push(format!("{}", scheme));
-            continue; 
+            continue;
         } else if c.username {
             let username = url.username();
             match username {
                 "" => (),
-                _ =>  { e.push(format!("{}", username)); },
+                _ => {
+                    e.push(format!("{}", username));
+                }
             }
         } else if c.host {
             let host = url.host();
             match host {
-                Some(host) => { e.push(format!("{}", host)); },
+                Some(host) => {
+                    e.push(format!("{}", host));
+                }
                 None => continue,
             }
         } else if c.port {
             let port = url.port();
             match port {
-                Some(port) => { e.push(format!("{}", port)); },
+                Some(port) => {
+                    e.push(format!("{}", port));
+                }
                 None => continue,
             }
         } else if c.path {
             let path = url.path();
             e.push(format!("{}", path));
-        } else if c.query { 
+        } else if c.query {
             let query = url.query();
             match query {
-                Some(query) => { e.push(format!("{}", query)); },
+                Some(query) => {
+                    e.push(format!("{}", query));
+                }
                 None => continue,
             }
         } else if c.fragment {
             let frag = url.fragment();
             match frag {
-                Some(frag) => { e.push(format!("{}", frag)); },
+                Some(frag) => {
+                    e.push(format!("{}", frag));
+                }
                 None => continue,
             }
         } else if c.all {
@@ -168,14 +199,13 @@ fn main() {
         } else {
             println!("Error: No option selected");
             std::process::exit(1);
-            
         }
     }
 
     if config_sptr.borrow().vec_sort {
         res_vec.borrow_mut().sort();
     }
-    
+
     if config_sptr.borrow().vec_unique {
         res_vec.borrow_mut().dedup();
     }
@@ -183,5 +213,4 @@ fn main() {
     for e in res_vec.borrow().iter() {
         println!("{}", e);
     }
-
 }
