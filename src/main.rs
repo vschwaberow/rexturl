@@ -59,6 +59,8 @@ fn print_help() {
     println!("  -P, --path       print the path");
     println!("  -q, --query      print the query");
     println!("  -f, --fragment   print the fragment");
+    println!("  -S, --sort       sort the output");
+    println!("  -U, --unique     remove duplicates from the output");
     println!("  -a, --all        print all parts");
     println!("  -h, --help       print this help");
     std::process::exit(0);
