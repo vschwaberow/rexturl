@@ -41,9 +41,6 @@ struct Config {
     all: bool,
 }
 
-// function which take a reference to Rc<RefCell<Config>>
-
-
 fn stdio_output(rvec: &Rc<RefCell<Vec<String>>>) {
     let rv = rvec.borrow();
     for e in rv.iter() {
