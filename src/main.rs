@@ -36,7 +36,35 @@ struct Config {
     fragment: bool,
     vec_sort: bool,
     vec_unique: bool,
+    output_json: bool,
+    output_print: bool,
     all: bool,
+}
+
+// function which take a reference to Rc<RefCell<Config>>
+
+
+fn stdio_output(rvec: &Rc<RefCell<Vec<String>>>) {
+    let rv = rvec.borrow();
+    for e in rv.iter() {
+        println!("{}", e);
+    }
+}
+
+fn json_output(rvec: &Rc<RefCell<Vec<String>>>) {
+    let rv = rvec.borrow();
+
+    println!("{{");
+    println!("\"urls\": [");
+    for (i, url) in rv.iter().enumerate() {
+        if i > 0 {
+            println!(",");
+        }
+        println!("\"{}\"", url);
+    }
+    println!("");
+    println!("]");
+    println!("}}");
 }
 
 fn check_for_stdin() {
@@ -61,6 +89,7 @@ fn print_help() {
     println!("  -f, --fragment   print the fragment");
     println!("  -S, --sort       sort the output");
     println!("  -U, --unique     remove duplicates from the output");
+    println!("  -j, --json       output in json format");
     println!("  -a, --all        print all parts");
     println!("  -h, --help       print this help");
     std::process::exit(0);
@@ -86,6 +115,8 @@ fn main() {
         fragment: false,
         vec_unique: false,
         vec_sort: false,
+        output_json: false,
+        output_print: true,
         all: false,
     };
 
@@ -127,6 +158,10 @@ fn main() {
             }
             "-a" | "--all" => {
                 c.all = true;
+            }
+            "-j" | "--json" => {
+                c.output_json = true;
+                c.output_print = false;
             }
             "-h" | "--help" => {
                 print_help();
@@ -212,7 +247,14 @@ fn main() {
         res_vec.borrow_mut().dedup();
     }
 
-    for e in res_vec.borrow().iter() {
-        println!("{}", e);
+    let rv = res_vec;
+    if config_sptr.borrow().output_json {
+        json_output(&rv);
+    } 
+
+    if config_sptr.borrow().output_print {
+        stdio_output(&rv);
     }
+
+
 }

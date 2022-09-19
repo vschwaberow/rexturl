@@ -30,6 +30,9 @@ Options:
   -P, --path       print the path
   -q, --query      print the query
   -f, --fragment   print the fragment
+  -S, --sort       sort the output
+  -U, --unique     remove duplicates from the output
+  -j, --json       output in json format
   -a, --all        print all parts
   -h, --help       print this help
 ````
