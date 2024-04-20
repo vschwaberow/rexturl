@@ -19,26 +19,46 @@ Author(s): Volker Schwaberow
 */
 
 use atty::Stream;
+use clap::{Parser, ValueHint};
 use std::cell::RefCell;
-use std::env;
 use std::io::{self, BufRead};
 use std::rc::Rc;
 use url::Url;
 
-#[derive(Debug)]
+#[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
 struct Config {
+    #[arg(long, value_hint = ValueHint::AnyPath)]
+    urls: Vec<String>,
+
+    #[arg(long)]
     scheme: bool,
+    #[arg(long)]
     username: bool,
+    #[arg(long)]
     host: bool,
+    #[arg(long)]
     port: bool,
+    #[arg(long)]
     path: bool,
+    #[arg(long)]
     query: bool,
+    #[arg(long)]
     fragment: bool,
-    vec_sort: bool,
-    vec_unique: bool,
-    output_json: bool,
-    output_print: bool,
+    #[arg(long)]
+    sort: bool,
+    #[arg(long)]
+    unique: bool,
+    #[arg(long)]
+    json: bool,
+    #[arg(long)]
     all: bool,
+}
+
+impl Config {
+    fn from_args() -> Self {
+        Self::parse()
+    }
 }
 
 fn stdio_output(rvec: &Rc<RefCell<Vec<String>>>) {
@@ -65,170 +85,66 @@ fn json_output(rvec: &Rc<RefCell<Vec<String>>>) {
 }
 
 fn check_for_stdin() {
-    if atty::is(Stream::Stdin) {
+    if atty::is(Stream::Stdin) && Config::from_args().urls.is_empty() {
         println!("Error: Not in stdin mode - switches ignored.");
         println!();
-        print_help();
         std::process::exit(0);
     }
 }
 
-fn print_help() {
-    print_prg_info();
-    println!("Usage: rexturl [options] [url]");
-    println!("Options:");
-    println!("  -s, --scheme     print the scheme");
-    println!("  -u, --username   print the username");
-    println!("  -H, --host       print the host");
-    println!("  -p, --port       print the port");
-    println!("  -P, --path       print the path");
-    println!("  -q, --query      print the query");
-    println!("  -f, --fragment   print the fragment");
-    println!("  -S, --sort       sort the output");
-    println!("  -U, --unique     remove duplicates from the output");
-    println!("  -j, --json       output in json format");
-    println!("  -a, --all        print all parts");
-    println!("  -h, --help       print this help");
-    std::process::exit(0);
-}
-
-fn print_prg_info() {
-    let prg_info = format!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-    let prg_authors = env!("CARGO_PKG_AUTHORS").to_string();
-    let prg_description = env!("CARGO_PKG_DESCRIPTION").to_string();
-    println!("{} {}", prg_info, prg_authors);
-    println!("{}", prg_description);
-    println!();
-}
-
 fn main() {
-    let config = Config {
-        scheme: false,
-        username: false,
-        host: false,
-        port: false,
-        path: false,
-        query: false,
-        fragment: false,
-        vec_unique: false,
-        vec_sort: false,
-        output_json: false,
-        output_print: true,
-        all: false,
-    };
-
-    let config_sptr = Rc::new(RefCell::new(config));
+    let config = Config::parse();
 
     check_for_stdin();
 
-    let stdin = io::stdin();
-    let args: Vec<String> = env::args().collect();
-    for arg in args.iter() {
-        let mut c = RefCell::borrow_mut(&config_sptr);
-        match arg.as_str() {
-            "-s" | "--scheme" => {
-                c.scheme = true;
-            }
-            "-u" | "--username" => {
-                c.username = true;
-            }
-            "-H" | "--host" => {
-                c.host = true;
-            }
-            "-p" | "--port" => {
-                c.port = true;
-            }
-            "-P" | "--path" => {
-                c.path = true;
-            }
-            "-q" | "--query" => {
-                c.query = true;
-            }
-            "-f" | "--fragment" => {
-                c.fragment = true;
-            }
-            "-S" | "--sort" => {
-                c.vec_sort = true;
-            }
-            "-U" | "--unique" => {
-                c.vec_unique = true;
-            }
-            "-a" | "--all" => {
-                c.all = true;
-            }
-            "-j" | "--json" => {
-                c.output_json = true;
-                c.output_print = false;
-            }
-            "-h" | "--help" => {
-                print_help();
-            }
-            _ => (),
-        }
-    }
-
     let res_vec: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
 
-    for line in stdin.lock().lines() {
-        let line = line.unwrap();
-        let url = Url::parse(&line);
+    let urls = if !config.urls.is_empty() {
+        config.urls.clone()
+    } else {
+        let mut lines = Vec::new();
+        for line in io::stdin().lock().lines() {
+            lines.push(line.unwrap());
+        }
+        lines
+    };
+
+    for url_str in urls {
+        let url = Url::parse(&url_str);
         if url.is_err() {
             println!("Error: {}", url.err().unwrap());
             std::process::exit(1);
         }
         let url = url.unwrap();
 
-        let c = config_sptr.borrow();
         let mut e = RefCell::borrow_mut(&res_vec);
 
-        if c.scheme {
-            let scheme = url.scheme();
-            e.push(scheme.to_string());
-            continue;
-        } else if c.username {
+        if config.scheme {
+            e.push(url.scheme().to_string());
+        } else if config.username {
             let username = url.username();
-            match username {
-                "" => (),
-                _ => {
-                    e.push(username.to_string());
-                }
+            if !username.is_empty() {
+                e.push(username.to_string());
             }
-        } else if c.host {
-            let host = url.host();
-            match host {
-                Some(host) => {
-                    e.push(host.to_string());
-                }
-                None => continue,
+        } else if config.host {
+            if let Some(host) = url.host() {
+                e.push(host.to_string());
             }
-        } else if c.port {
-            let port = url.port();
-            match port {
-                Some(port) => {
-                    e.push(port.to_string());
-                }
-                None => continue,
+        } else if config.port {
+            if let Some(port) = url.port() {
+                e.push(port.to_string());
             }
-        } else if c.path {
-            let path = url.path();
-            e.push(path.to_string());
-        } else if c.query {
-            let query = url.query();
-            match query {
-                Some(query) => {
-                    e.push(query.to_string());
-                }
-                None => continue,
+        } else if config.path {
+            e.push(url.path().to_string());
+        } else if config.query {
+            if let Some(query) = url.query() {
+                e.push(query.to_string());
             }
-        } else if c.fragment {
-            let frag = url.fragment();
-            match frag {
-                Some(frag) => {
-                    e.push(frag.to_string());
-                }
-                None => continue,
+        } else if config.fragment {
+            if let Some(frag) = url.fragment() {
+                e.push(frag.to_string());
             }
-        } else if c.all {
+        } else if config.all {
             e.push(url.to_string());
         } else {
             println!("Error: No option selected");
@@ -236,22 +152,18 @@ fn main() {
         }
     }
 
-    if config_sptr.borrow().vec_sort {
+    if config.sort {
         res_vec.borrow_mut().sort();
     }
 
-    if config_sptr.borrow().vec_unique {
+    if config.unique {
         res_vec.borrow_mut().dedup();
     }
 
     let rv = res_vec;
-    if config_sptr.borrow().output_json {
+    if config.json {
         json_output(&rv);
-    } 
-
-    if config_sptr.borrow().output_print {
+    } else {
         stdio_output(&rv);
     }
-
-
 }

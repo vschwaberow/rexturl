@@ -23,18 +23,18 @@ A simple tool to split urls in their protocol, host, port, path and query parts.
 
 Usage: rexturl [options] [url]
 Options:
-  -s, --scheme     print the scheme
-  -u, --username   print the username
-  -H, --host       print the host
-  -p, --port       print the port
-  -P, --path       print the path
-  -q, --query      print the query
-  -f, --fragment   print the fragment
-  -S, --sort       sort the output
-  -U, --unique     remove duplicates from the output
-  -j, --json       output in json format
-  -a, --all        print all parts
-  -h, --help       print this help
+  --scheme     print the scheme
+  --username   print the username
+  --host       print the host
+  --port       print the port
+  --path       print the path
+  --query      print the query
+  --fragment   print the fragment
+  --sort       sort the output
+  --unique     remove duplicates from the output
+  --json       output in json format
+  --all        print all parts
+  -h, --help   print this help
 ````
 
 ## Contribution 
