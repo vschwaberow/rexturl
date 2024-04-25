@@ -1,6 +1,6 @@
 [package]
 name = "rexturl"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 authors = ["Volker Schwaberow <volker@schwaberow.de>"]
@@ -20,4 +20,5 @@ opt-level = "s"
 
 [dependencies]
 atty = "0.2.14"
+clap = { version = "4.5.4", features = ["cargo", "env", "derive"] }
 url = "2.3.1"
