@@ -21,38 +21,70 @@ Author(s): Volker Schwaberow
 use atty::Stream;
 use clap::{Parser, ValueHint};
 use std::cell::RefCell;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, BufWriter, Write};
 use std::rc::Rc;
 use url::Url;
 
 #[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author,
+    version,
+    about = "A tool for parsing and manipulating URLs",
+    long_about = "This program allows you to parse URLs and extract or manipulate various components. It supports custom output formats and JSON output."
+)]
 struct Config {
-    #[arg(long, value_hint = ValueHint::AnyPath)]
+    #[arg(long, value_hint = ValueHint::AnyPath, help = "Input URLs to process")]
     urls: Vec<String>,
 
-    #[arg(long)]
+    #[arg(long, help = "Extract and display the URL scheme")]
     scheme: bool,
-    #[arg(long)]
+
+    #[arg(long, help = "Extract and display the username from the URL")]
     username: bool,
-    #[arg(long)]
+
+    #[arg(long, help = "Extract and display the hostname")]
     host: bool,
-    #[arg(long)]
+
+    #[arg(long, help = "Extract and display the port number")]
     port: bool,
-    #[arg(long)]
+
+    #[arg(long, help = "Extract and display the URL path")]
     path: bool,
-    #[arg(long)]
+
+    #[arg(long, help = "Extract and display the query string")]
     query: bool,
-    #[arg(long)]
+
+    #[arg(long, help = "Extract and display the URL fragment")]
     fragment: bool,
-    #[arg(long)]
+
+    #[arg(long, help = "Sort the output")]
     sort: bool,
-    #[arg(long)]
+
+    #[arg(long, help = "Remove duplicate entries from the output")]
     unique: bool,
-    #[arg(long)]
+
+    #[arg(long, help = "Output results in JSON format")]
     json: bool,
-    #[arg(long)]
+
+    #[arg(long, help = "Display all URL components")]
     all: bool,
+
+    #[arg(
+        long,
+        help = "Enable custom output mode",
+        long_help = "Enable custom output mode. Use with --format to specify the output format."
+    )]
+    custom: bool,
+
+    #[arg(
+        long,
+        default_value = "{scheme}://{host}{path}",
+        help = "Custom output format",
+        long_help = "Specify a custom output format. Available placeholders: \
+                     {scheme}, {username}, {host}, {port}, {path}, {query}, {fragment}. \
+                     Example: --format \"{scheme}://{host}:{port}{path}?{query}\""
+    )]
+    format: String,
 }
 
 impl Config {
@@ -63,8 +95,10 @@ impl Config {
 
 fn stdio_output(rvec: &Rc<RefCell<Vec<String>>>) {
     let rv = rvec.borrow();
+    let stdout = io::stdout();
+    let mut writer = BufWriter::new(stdout.lock());
     for e in rv.iter() {
-        println!("{}", e);
+        writeln!(writer, "{}", e).unwrap();
     }
 }
 
@@ -92,78 +126,100 @@ fn check_for_stdin() {
     }
 }
 
+fn custom_output(urls: &[String], format: &str) {
+    for url_str in urls {
+        if let Ok(url) = Url::parse(url_str) {
+            let output = format
+                .replace("{scheme}", url.scheme())
+                .replace("{username}", url.username())
+                .replace("{host}", url.host_str().unwrap_or(""))
+                .replace(
+                    "{port}",
+                    &url.port().map_or("".to_string(), |p| p.to_string()),
+                )
+                .replace("{path}", url.path())
+                .replace("{query}", url.query().unwrap_or(""))
+                .replace("{fragment}", url.fragment().unwrap_or(""));
+            println!("{}", output);
+        } else {
+            eprintln!("Error parsing URL: {}", url_str);
+        }
+    }
+}
+
 fn main() {
     let config = Config::parse();
 
     check_for_stdin();
 
-    let res_vec: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
-
-    let urls = if !config.urls.is_empty() {
+    let urls: Vec<String> = if !config.urls.is_empty() {
         config.urls.clone()
     } else {
-        let mut lines = Vec::new();
-        for line in io::stdin().lock().lines() {
-            lines.push(line.unwrap());
-        }
-        lines
+        io::stdin()
+            .lock()
+            .lines()
+            .map(|line| line.expect("Failed to read line from stdin"))
+            .collect()
     };
 
-    for url_str in urls {
-        let url = Url::parse(&url_str);
-        if url.is_err() {
-            println!("Error: {}", url.err().unwrap());
-            std::process::exit(1);
-        }
-        let url = url.unwrap();
+    let res_vec: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::with_capacity(urls.len())));
 
-        let mut e = RefCell::borrow_mut(&res_vec);
+    // Process URLs and populate res_vec
+    process_urls(&config, &urls, &res_vec);
 
-        if config.scheme {
-            e.push(url.scheme().to_string());
-        } else if config.username {
-            let username = url.username();
-            if !username.is_empty() {
-                e.push(username.to_string());
-            }
-        } else if config.host {
-            if let Some(host) = url.host() {
-                e.push(host.to_string());
-            }
-        } else if config.port {
-            if let Some(port) = url.port() {
-                e.push(port.to_string());
-            }
-        } else if config.path {
-            e.push(url.path().to_string());
-        } else if config.query {
-            if let Some(query) = url.query() {
-                e.push(query.to_string());
-            }
-        } else if config.fragment {
-            if let Some(frag) = url.fragment() {
-                e.push(frag.to_string());
-            }
-        } else if config.all {
-            e.push(url.to_string());
-        } else {
-            println!("Error: No option selected");
-            std::process::exit(1);
-        }
-    }
-
+    // Apply sorting and deduplication if needed
     if config.sort {
         res_vec.borrow_mut().sort();
     }
-
     if config.unique {
         res_vec.borrow_mut().dedup();
     }
 
-    let rv = res_vec;
-    if config.json {
-        json_output(&rv);
-    } else {
-        stdio_output(&rv);
+    match (config.json, config.custom) {
+        (true, _) => json_output(&res_vec),
+        (_, true) => custom_output(&urls, &config.format),
+        _ => stdio_output(&res_vec),
+    }
+}
+
+fn process_urls(config: &Config, urls: &[String], res_vec: &Rc<RefCell<Vec<String>>>) {
+    for url_str in urls {
+        if let Ok(url) = Url::parse(url_str) {
+            let mut parts = Vec::new();
+
+            if config.all || config.scheme {
+                parts.push(url.scheme().to_string());
+            }
+            if config.all || config.username {
+                parts.push(url.username().to_string());
+            }
+            if config.all || config.host {
+                parts.push(url.host_str().unwrap_or("").to_string());
+            }
+            if config.all || config.port {
+                if let Some(port) = url.port() {
+                    parts.push(port.to_string());
+                }
+            }
+            if config.all || config.path {
+                parts.push(url.path().to_string());
+            }
+            if config.all || config.query {
+                if let Some(query) = url.query() {
+                    parts.push(query.to_string());
+                }
+            }
+            if config.all || config.fragment {
+                if let Some(fragment) = url.fragment() {
+                    parts.push(fragment.to_string());
+                }
+            }
+
+            if !parts.is_empty() {
+                res_vec.borrow_mut().push(parts.join("\t"));
+            }
+        } else {
+            eprintln!("Error parsing URL: {}", url_str);
+        }
     }
 }
