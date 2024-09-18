@@ -25,6 +25,63 @@ use std::io::{self, BufRead, BufWriter, Write};
 use std::rc::Rc;
 use url::Url;
 
+// ... existing imports and struct definitions ...
+
+fn extract_domain(host: &str) -> String {
+    let parts: Vec<&str> = host.split('.').collect();
+    if parts.len() > 2 {
+        parts[parts.len() - 2..].join(".")
+    } else {
+        host.to_string()
+    }
+}
+
+fn process_urls(config: &Config, urls: &[String], res_vec: &Rc<RefCell<Vec<String>>>) {
+    for url_str in urls {
+        if let Ok(url) = Url::parse(url_str) {
+            let mut parts = Vec::new();
+
+            // ... existing extraction logic ...
+
+            if config.all || config.domain {
+                if let Some(host) = url.host_str() {
+                    parts.push(extract_domain(host));
+                }
+            }
+
+            if !parts.is_empty() {
+                res_vec.borrow_mut().push(parts.join("\t"));
+            }
+        } else {
+            eprintln!("Error parsing URL: {}", url_str);
+        }
+    }
+}
+
+fn custom_output(urls: &[String], format: &str) {
+    for url_str in urls {
+        if let Ok(url) = Url::parse(url_str) {
+            let domain = url.host_str().map(extract_domain).unwrap_or_else(|| "N/A".to_string());
+
+            let output = format
+                .replace("{scheme}", url.scheme())
+                .replace("{username}", url.username())
+                .replace("{host}", url.host_str().unwrap_or(""))
+                .replace("{domain}", &domain)  // This line handles the domain replacement
+                .replace(
+                    "{port}",
+                    &url.port().map_or("".to_string(), |p| p.to_string()),
+                )
+                .replace("{path}", url.path())
+                .replace("{query}", url.query().unwrap_or(""))
+                .replace("{fragment}", url.fragment().unwrap_or(""));
+            println!("{}", output);
+        } else {
+            eprintln!("Error parsing URL: {}", url_str);
+        }
+    }
+}
+
 #[derive(Debug, Parser)]
 #[command(
     author,
@@ -85,6 +142,9 @@ struct Config {
                      Example: --format \"{scheme}://{host}:{port}{path}?{query}\""
     )]
     format: String,
+
+    #[arg(long, help = "Extract and display the domain")]
+    domain: bool,
 }
 
 impl Config {
@@ -126,27 +186,6 @@ fn check_for_stdin() {
     }
 }
 
-fn custom_output(urls: &[String], format: &str) {
-    for url_str in urls {
-        if let Ok(url) = Url::parse(url_str) {
-            let output = format
-                .replace("{scheme}", url.scheme())
-                .replace("{username}", url.username())
-                .replace("{host}", url.host_str().unwrap_or(""))
-                .replace(
-                    "{port}",
-                    &url.port().map_or("".to_string(), |p| p.to_string()),
-                )
-                .replace("{path}", url.path())
-                .replace("{query}", url.query().unwrap_or(""))
-                .replace("{fragment}", url.fragment().unwrap_or(""));
-            println!("{}", output);
-        } else {
-            eprintln!("Error parsing URL: {}", url_str);
-        }
-    }
-}
-
 fn main() {
     let config = Config::parse();
 
@@ -164,10 +203,8 @@ fn main() {
 
     let res_vec: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::with_capacity(urls.len())));
 
-    // Process URLs and populate res_vec
     process_urls(&config, &urls, &res_vec);
 
-    // Apply sorting and deduplication if needed
     if config.sort {
         res_vec.borrow_mut().sort();
     }
@@ -179,47 +216,5 @@ fn main() {
         (true, _) => json_output(&res_vec),
         (_, true) => custom_output(&urls, &config.format),
         _ => stdio_output(&res_vec),
-    }
-}
-
-fn process_urls(config: &Config, urls: &[String], res_vec: &Rc<RefCell<Vec<String>>>) {
-    for url_str in urls {
-        if let Ok(url) = Url::parse(url_str) {
-            let mut parts = Vec::new();
-
-            if config.all || config.scheme {
-                parts.push(url.scheme().to_string());
-            }
-            if config.all || config.username {
-                parts.push(url.username().to_string());
-            }
-            if config.all || config.host {
-                parts.push(url.host_str().unwrap_or("").to_string());
-            }
-            if config.all || config.port {
-                if let Some(port) = url.port() {
-                    parts.push(port.to_string());
-                }
-            }
-            if config.all || config.path {
-                parts.push(url.path().to_string());
-            }
-            if config.all || config.query {
-                if let Some(query) = url.query() {
-                    parts.push(query.to_string());
-                }
-            }
-            if config.all || config.fragment {
-                if let Some(fragment) = url.fragment() {
-                    parts.push(fragment.to_string());
-                }
-            }
-
-            if !parts.is_empty() {
-                res_vec.borrow_mut().push(parts.join("\t"));
-            }
-        } else {
-            eprintln!("Error parsing URL: {}", url_str);
-        }
     }
 }
