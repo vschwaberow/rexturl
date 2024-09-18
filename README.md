@@ -34,22 +34,23 @@ If no URLs are provided, rexturl will read from stdin.
 
 ## Options
 
-```--urls <URLS>``` Input URLs to process
-```--scheme``` Extract and display the URL scheme
-```--username``` Extract and display the username from the URL
-```--host``` Extract and display the hostname
-```--port``` Extract and display the port number
-```--path``` Extract and display the URL path
-```--query``` Extract and display the query string
-```--fragment``` Extract and display the URL fragment
-```--sort``` Sort the output
-```--unique``` Remove duplicate entries from the output
-```--json``` Output results in JSON format
-```--all``` Display all URL components
-```--custom``` Enable custom output mode
-```--format <FORMAT>``` Custom output format (default: "{scheme}://{host}{path}")
-```-h```, ```--help``` Print help information
-```-V```, ```--version``` Print version information
+`--urls <URLS>` Input URLs to process
+`--scheme` Extract and display the URL scheme
+`--username` Extract and display the username from the URL
+`--host` Extract and display the hostname
+`--port` Extract and display the port number
+`--path` Extract and display the URL path
+`--query` Extract and display the query string
+`--fragment` Extract and display the URL fragment
+`--sort` Sort the output
+`--unique` Remove duplicate entries from the output
+`--json` Output results in JSON format
+`--all` Display all URL components
+`--custom` Enable custom output mode
+`--domain` Extract the domain
+`--format <FORMAT>` Custom output format (default: "{scheme}://{host}{path}")
+`-h`, `--help` Print help information
+`-V`, `--version` Print version information
 
 
 ## Examples
@@ -90,7 +91,8 @@ When using `--custom` and `--format`, you can use the following placeholders:
 
 - `{scheme}`
 - `{username}`
-- `{host}`
+- `{host}` 
+- `{domain}`
 - `{port}`
 - `{path}`
 - `{query}`
