@@ -1,9 +1,9 @@
 use atty::Stream;
 use clap::{Parser, ValueHint};
-use std::cell::RefCell;
+use rayon::prelude::*;
 use std::fmt;
 use std::io::{self, BufRead, BufWriter, Write};
-use std::rc::Rc;
+use std::sync::mpsc;
 use url::Url;
 
 #[derive(Debug)]
@@ -17,6 +17,7 @@ struct UrlComponents {
     username: String,
     subdomain: String,
     domain: String,
+    hostname: String,
     port: String,
     path: String,
     query: String,
@@ -98,14 +99,15 @@ fn parse_url(url_str: &str) -> Result<Url, url::ParseError> {
 
 fn extract_url_components(url: &Url) -> UrlComponents {
     let host_str = url.host_str().unwrap_or("");
-    let subdomain = if !host_str.is_empty() { extract_subdomain(host_str) } else { String::new() };
     let domain = if !host_str.is_empty() { extract_domain(host_str) } else { String::new() };
+    let subdomain = if !host_str.is_empty() { extract_subdomain(host_str) } else { String::new() };
     
     UrlComponents {
         scheme: url.scheme().to_string(),
         username: url.username().to_string(),
         subdomain,
         domain,
+        hostname: host_str.to_string(),
         port: url.port().map_or(String::new(), |p| p.to_string()),
         path: url.path().to_string(),
         query: url.query().unwrap_or("").to_string(),
@@ -113,60 +115,154 @@ fn extract_url_components(url: &Url) -> UrlComponents {
     }
 }
 
-fn process_urls(config: &Config, urls: &[String], res_vec: &Rc<RefCell<Vec<String>>>) -> Result<(), AppError> {
-    for url_str in urls {
-        match parse_url(url_str) {
-            Ok(url) => {
-                let components = extract_url_components(&url);
-                let mut parts = Vec::new();
+fn process_url(config: &Config, url_str: &str) -> Option<String> {
+    match parse_url(url_str) {
+        Ok(url) => {
+            let components = extract_url_components(&url);
+            let mut parts = Vec::new();
 
-                if config.all || config.scheme { parts.push(components.scheme); }
-                if config.all || config.username { parts.push(components.username); }
-                if config.all || config.host { parts.push(components.subdomain); }
-                if config.all || config.port { if !components.port.is_empty() { parts.push(components.port); } }
-                if config.all || config.path { parts.push(components.path); }
-                if config.all || config.query { if !components.query.is_empty() { parts.push(components.query); } }
-                if config.all || config.fragment { if !components.fragment.is_empty() { parts.push(components.fragment); } }
-                if config.all || config.domain { parts.push(components.domain); }
+            if config.all || config.scheme { parts.push(components.scheme); }
+            if config.all || config.username { parts.push(components.username); }
+            if config.all || config.host { parts.push(components.subdomain); }
+            if config.all || config.port { if !components.port.is_empty() { parts.push(components.port); } }
+            if config.all || config.path { parts.push(components.path); }
+            if config.all || config.query { if !components.query.is_empty() { parts.push(components.query); } }
+            if config.all || config.fragment { if !components.fragment.is_empty() { parts.push(components.fragment); } }
+            if config.all || config.domain { parts.push(components.domain); }
 
-                if !parts.is_empty() {
-                    res_vec.borrow_mut().push(parts.join("\t"));
+            if !parts.is_empty() {
+                return Some(parts.join("\t"));
+            }
+        },
+        Err(err) => {
+            eprintln!("Error parsing URL '{}': {}", url_str, err);
+        }
+    }
+    None
+}
+
+fn custom_format_url(url_str: &str, format: &str) -> Result<String, AppError> {
+    match parse_url(url_str) {
+        Ok(url) => {
+            let components = extract_url_components(&url);
+            
+            let output = format
+                .replace("{scheme}", &components.scheme)
+                .replace("{username}", &components.username)
+                .replace("{subdomain}", &components.subdomain)
+                .replace("{host}", &components.hostname)
+                .replace("{hostname}", &components.hostname)
+                .replace("{domain}", &components.domain)
+                .replace("{port}", &components.port)
+                .replace("{path}", &components.path)
+                .replace("{query}", &components.query)
+                .replace("{fragment}", &components.fragment);
+            Ok(output)
+        },
+        Err(err) => {
+            eprintln!("Error parsing URL '{}': {}", url_str, err);
+            Ok(String::new())
+        }
+    }
+}
+
+fn process_urls_parallel(config: &Config, urls: &[String]) -> Vec<String> {
+    urls.par_iter()
+        .filter_map(|url_str| process_url(config, url_str))
+        .collect()
+}
+
+fn process_urls_streaming<R: BufRead>(config: &Config, reader: R) -> Result<(), AppError> {
+    if config.custom || !config.format.is_empty() {
+        for line_result in reader.lines() {
+            match line_result {
+                Ok(line) => {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+                    if let Ok(output) = custom_format_url(&line, &config.format) {
+                        if !output.is_empty() {
+                            println!("{}", output);
+                        }
+                    }
+                },
+                Err(e) => eprintln!("Error reading line: {}", e),
+            }
+        }
+        return Ok(());
+    }
+    
+    let (tx, rx) = mpsc::channel();
+    let config_clone = config.clone();
+    
+    std::thread::spawn(move || {
+        let mut results = Vec::new();
+        while let Ok(result) = rx.recv() {
+            match result {
+                Some(line) => results.push(line),
+                None => break,
+            }
+        }
+        
+        if config_clone.sort { results.sort(); }
+        if config_clone.unique { results.dedup(); }
+        
+        match (config_clone.json, config_clone.custom) {
+            (true, _) => {
+                println!("{{");
+                println!("\"urls\": [");
+                for (i, url) in results.iter().enumerate() {
+                    if i > 0 { println!(","); }
+                    println!("\"{}\"", url);
+                }
+                println!("]");
+                println!("}}");
+            },
+            _ => {
+                let stdout = io::stdout();
+                let mut writer = BufWriter::new(stdout.lock());
+                for line in results {
+                    if let Err(e) = writeln!(writer, "{}", line) {
+                        eprintln!("Error writing output: {}", e);
+                    }
+                }
+            }
+        }
+    });
+    
+    for line_result in reader.lines() {
+        match line_result {
+            Ok(line) => {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                
+                if config.custom {
+                    if let Ok(output) = custom_format_url(&line, &config.format) {
+                        if !output.is_empty() {
+                            let _ = tx.send(Some(output));
+                        }
+                    }
+                } else {
+                    if let Some(result) = process_url(config, &line) {
+                        let _ = tx.send(Some(result));
+                    }
                 }
             },
-            Err(err) => {
-                eprintln!("Error parsing URL '{}': {}", url_str, err);
+            Err(e) => {
+                eprintln!("Error reading line: {}", e);
             }
         }
     }
+    
+    let _ = tx.send(None);
+    
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    
     Ok(())
 }
 
-fn custom_output(urls: &[String], format: &str) -> Result<(), AppError> {
-    for url_str in urls {
-        match parse_url(url_str) {
-            Ok(url) => {
-                let components = extract_url_components(&url);
-                
-                let output = format
-                    .replace("{scheme}", &components.scheme)
-                    .replace("{username}", &components.username)
-                    .replace("{host}", &components.subdomain)
-                    .replace("{domain}", &components.domain)
-                    .replace("{port}", &components.port)
-                    .replace("{path}", &components.path)
-                    .replace("{query}", &components.query)
-                    .replace("{fragment}", &components.fragment);
-                println!("{}", output);
-            },
-            Err(err) => {
-                eprintln!("Error parsing URL '{}': {}", url_str, err);
-            }
-        }
-    }
-    Ok(())
-}
-
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 #[command(author, version, about = "A tool for parsing and manipulating URLs", long_about = None)]
 struct Config {
     #[arg(long, value_hint = ValueHint::AnyPath, help = "Input URLs to process")]
@@ -195,7 +291,13 @@ struct Config {
     all: bool,
     #[arg(long, help = "Enable custom output mode")]
     custom: bool,
-    #[arg(long, default_value = "{scheme}://{host}{path}", help = "Custom output format")]
+    #[arg(
+        long, 
+        num_args = 0..=1,
+        default_missing_value = "{scheme}://{host}{path}",
+        default_value = "{scheme}://{host}{path}",
+        help = "Custom output format. Available placeholders: {scheme}, {username}, {subdomain}, {host}, {hostname}, {domain}, {port}, {path}, {query}, {fragment}"
+    )]
     format: String,
     #[arg(long, help = "Extract and display the domain")]
     domain: bool,
@@ -205,60 +307,63 @@ impl Config {
     fn from_args() -> Self { Self::parse() }
 }
 
-fn stdio_output(rvec: &Rc<RefCell<Vec<String>>>) -> Result<(), AppError> {
-    let rv = rvec.borrow();
-    let stdout = io::stdout();
-    let mut writer = BufWriter::new(stdout.lock());
-    for e in rv.iter() {
-        writeln!(writer, "{}", e)?;
-    }
-    Ok(())
-}
-
-fn json_output(rvec: &Rc<RefCell<Vec<String>>>) -> Result<(), AppError> {
-    let rv = rvec.borrow();
-    println!("{{");
-    println!("\"urls\": [");
-    for (i, url) in rv.iter().enumerate() {
-        if i > 0 { println!(","); }
-        println!("\"{}\"", url);
-    }
-    println!("]");
-    println!("}}");
-    Ok(())
-}
-
 fn check_for_stdin() -> Result<(), AppError> {
     if atty::is(Stream::Stdin) && Config::from_args().urls.is_empty() {
-        eprintln!("Error: Not in stdin mode - switches ignored.");
+        eprintln!("Error: No input URLs provided. Use --urls or pipe input from stdin.");
         std::process::exit(1);
     }
     Ok(())
 }
 
 fn main() -> Result<(), AppError> {
-    let config = Config::parse();
-    check_for_stdin()?;
+    let mut config = Config::parse();
     
-    let urls: Vec<String> = if !config.urls.is_empty() {
-        config.urls.clone()
+    if config.urls.is_empty() {
+        check_for_stdin()?;
+    }
+    
+    if !config.format.is_empty() || config.custom {
+        config.custom = true;
+    }
+    
+    if !config.urls.is_empty() {
+        if config.custom {
+            config.urls.iter().for_each(|url_str| {
+                if let Ok(output) = custom_format_url(url_str, &config.format) {
+                    if !output.is_empty() {
+                        println!("{}", output);
+                    }
+                }
+            });
+        } else {
+            let results = process_urls_parallel(&config, &config.urls);
+            let mut results = results;
+            if config.sort { results.sort(); }
+            if config.unique { results.dedup(); }
+            
+            match config.json {
+                true => {
+                    println!("{{");
+                    println!("\"urls\": [");
+                    for (i, url) in results.iter().enumerate() {
+                        if i > 0 { println!(","); }
+                        println!("\"{}\"", url);
+                    }
+                    println!("]");
+                    println!("}}");
+                },
+                _ => {
+                    let stdout = io::stdout();
+                    let mut writer = BufWriter::new(stdout.lock());
+                    for line in results {
+                        writeln!(writer, "{}", line)?;
+                    }
+                }
+            }
+        }
     } else {
-        io::stdin()
-            .lock()
-            .lines()
-            .map(|line| line.map_err(AppError::from))
-            .collect::<Result<Vec<String>, AppError>>()?
-    };
-    
-    let res_vec: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::with_capacity(urls.len())));
-    process_urls(&config, &urls, &res_vec)?;
-    if config.sort { res_vec.borrow_mut().sort(); }
-    if config.unique { res_vec.borrow_mut().dedup(); }
-    
-    match (config.json, config.custom) {
-        (true, _) => json_output(&res_vec)?,
-        (_, true) => custom_output(&urls, &config.format)?,
-        _ => stdio_output(&res_vec)?,
+        let stdin = io::stdin();
+        process_urls_streaming(&config, stdin.lock())?;
     }
     
     Ok(())
