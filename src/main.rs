@@ -12,6 +12,17 @@ enum AppError {
     UrlParseError(url::ParseError),
 }
 
+struct UrlComponents {
+    scheme: String,
+    username: String,
+    subdomain: String,
+    domain: String,
+    port: String,
+    path: String,
+    query: String,
+    fragment: String,
+}
+
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -75,34 +86,48 @@ fn extract_subdomain(host: &str) -> String {
         .to_string()
 }
 
+fn parse_url(url_str: &str) -> Result<Url, url::ParseError> {
+    let url_with_scheme = if !url_str.contains("://") {
+        format!("https://{}", url_str)
+    } else {
+        url_str.to_string()
+    };
+    
+    Url::parse(&url_with_scheme)
+}
+
+fn extract_url_components(url: &Url) -> UrlComponents {
+    let host_str = url.host_str().unwrap_or("");
+    let subdomain = if !host_str.is_empty() { extract_subdomain(host_str) } else { String::new() };
+    let domain = if !host_str.is_empty() { extract_domain(host_str) } else { String::new() };
+    
+    UrlComponents {
+        scheme: url.scheme().to_string(),
+        username: url.username().to_string(),
+        subdomain,
+        domain,
+        port: url.port().map_or(String::new(), |p| p.to_string()),
+        path: url.path().to_string(),
+        query: url.query().unwrap_or("").to_string(),
+        fragment: url.fragment().unwrap_or("").to_string(),
+    }
+}
+
 fn process_urls(config: &Config, urls: &[String], res_vec: &Rc<RefCell<Vec<String>>>) -> Result<(), AppError> {
     for url_str in urls {
-        let url_with_scheme = if !url_str.contains("://") {
-            format!("https://{}", url_str)
-        } else {
-            url_str.to_string()
-        };
-
-        match Url::parse(&url_with_scheme) {
+        match parse_url(url_str) {
             Ok(url) => {
+                let components = extract_url_components(&url);
                 let mut parts = Vec::new();
 
-                if config.all || config.scheme { parts.push(url.scheme().to_string()); }
-                if config.all || config.username { parts.push(url.username().to_string()); }
-                if config.all || config.host { 
-                    if let Some(host) = url.host_str() {
-                        parts.push(extract_subdomain(host));
-                    }
-                }
-                if config.all || config.port { if let Some(port) = url.port() { parts.push(port.to_string()); } }
-                if config.all || config.path { parts.push(url.path().to_string()); }
-                if config.all || config.query { if let Some(query) = url.query() { parts.push(query.to_string()); } }
-                if config.all || config.fragment { if let Some(fragment) = url.fragment() { parts.push(fragment.to_string()); } }
-                if config.all || config.domain { 
-                    if let Some(host) = url.host_str() {
-                        parts.push(extract_domain(host));
-                    }
-                }
+                if config.all || config.scheme { parts.push(components.scheme); }
+                if config.all || config.username { parts.push(components.username); }
+                if config.all || config.host { parts.push(components.subdomain); }
+                if config.all || config.port { if !components.port.is_empty() { parts.push(components.port); } }
+                if config.all || config.path { parts.push(components.path); }
+                if config.all || config.query { if !components.query.is_empty() { parts.push(components.query); } }
+                if config.all || config.fragment { if !components.fragment.is_empty() { parts.push(components.fragment); } }
+                if config.all || config.domain { parts.push(components.domain); }
 
                 if !parts.is_empty() {
                     res_vec.borrow_mut().push(parts.join("\t"));
@@ -118,25 +143,19 @@ fn process_urls(config: &Config, urls: &[String], res_vec: &Rc<RefCell<Vec<Strin
 
 fn custom_output(urls: &[String], format: &str) -> Result<(), AppError> {
     for url_str in urls {
-        let url_with_scheme = if !url_str.contains("://") {
-            format!("https://{}", url_str)
-        } else {
-            url_str.to_string()
-        };
-
-        match Url::parse(&url_with_scheme) {
+        match parse_url(url_str) {
             Ok(url) => {
-                let domain = url.host_str().map(extract_domain).unwrap_or_else(|| "N/A".to_string());
-                let host = url.host_str().map(extract_subdomain).unwrap_or_else(|| "N/A".to_string());
+                let components = extract_url_components(&url);
+                
                 let output = format
-                    .replace("{scheme}", url.scheme())
-                    .replace("{username}", url.username())
-                    .replace("{host}", &host)
-                    .replace("{domain}", &domain)
-                    .replace("{port}", &url.port().map_or("".to_string(), |p| p.to_string()))
-                    .replace("{path}", url.path())
-                    .replace("{query}", url.query().unwrap_or(""))
-                    .replace("{fragment}", url.fragment().unwrap_or(""));
+                    .replace("{scheme}", &components.scheme)
+                    .replace("{username}", &components.username)
+                    .replace("{host}", &components.subdomain)
+                    .replace("{domain}", &components.domain)
+                    .replace("{port}", &components.port)
+                    .replace("{path}", &components.path)
+                    .replace("{query}", &components.query)
+                    .replace("{fragment}", &components.fragment);
                 println!("{}", output);
             },
             Err(err) => {
