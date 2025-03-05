@@ -1,27 +1,16 @@
 use atty::Stream;
 use clap::{Parser, ValueHint};
 use rayon::prelude::*;
+use serde::Serialize;
 use std::fmt;
 use std::io::{self, BufRead, BufWriter, Write};
-use std::sync::mpsc;
 use url::Url;
 
 #[derive(Debug)]
 enum AppError {
     IoError(io::Error),
     UrlParseError(url::ParseError),
-}
-
-struct UrlComponents {
-    scheme: String,
-    username: String,
-    subdomain: String,
-    domain: String,
-    hostname: String,
-    port: String,
-    path: String,
-    query: String,
-    fragment: String,
+    JsonError(serde_json::Error),
 }
 
 impl fmt::Display for AppError {
@@ -29,6 +18,7 @@ impl fmt::Display for AppError {
         match self {
             AppError::IoError(err) => write!(f, "IO error: {}", err),
             AppError::UrlParseError(err) => write!(f, "URL parse error: {}", err),
+            AppError::JsonError(err) => write!(f, "JSON error: {}", err),
         }
     }
 }
@@ -43,6 +33,29 @@ impl From<url::ParseError> for AppError {
     fn from(err: url::ParseError) -> Self {
         AppError::UrlParseError(err)
     }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        AppError::JsonError(err)
+    }
+}
+
+#[derive(Serialize)]
+struct UrlsOutput {
+    urls: Vec<String>,
+}
+
+struct UrlComponents {
+    scheme: String,
+    username: String,
+    subdomain: String,
+    domain: String,
+    hostname: String,
+    port: String,
+    path: String,
+    query: String,
+    fragment: String,
 }
 
 const MULTI_PART_TLDS: &[&str] = &[
@@ -172,63 +185,18 @@ fn process_urls_parallel(config: &Config, urls: &[String]) -> Vec<String> {
         .collect()
 }
 
+fn output_json(results: &[String]) -> Result<(), AppError> {
+    let output = UrlsOutput { 
+        urls: results.to_vec() 
+    };
+    
+    let json_string = serde_json::to_string_pretty(&output)?;
+    println!("{}", json_string);
+    Ok(())
+}
+
 fn process_urls_streaming<R: BufRead>(config: &Config, reader: R) -> Result<(), AppError> {
-    if config.custom || !config.format.is_empty() {
-        for line_result in reader.lines() {
-            match line_result {
-                Ok(line) => {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    if let Ok(output) = custom_format_url(&line, &config.format) {
-                        if !output.is_empty() {
-                            println!("{}", output);
-                        }
-                    }
-                },
-                Err(e) => eprintln!("Error reading line: {}", e),
-            }
-        }
-        return Ok(());
-    }
-    
-    let (tx, rx) = mpsc::channel();
-    let config_clone = config.clone();
-    
-    std::thread::spawn(move || {
-        let mut results = Vec::new();
-        while let Ok(result) = rx.recv() {
-            match result {
-                Some(line) => results.push(line),
-                None => break,
-            }
-        }
-        
-        if config_clone.sort { results.sort(); }
-        if config_clone.unique { results.dedup(); }
-        
-        match (config_clone.json, config_clone.custom) {
-            (true, _) => {
-                println!("{{");
-                println!("\"urls\": [");
-                for (i, url) in results.iter().enumerate() {
-                    if i > 0 { println!(","); }
-                    println!("\"{}\"", url);
-                }
-                println!("]");
-                println!("}}");
-            },
-            _ => {
-                let stdout = io::stdout();
-                let mut writer = BufWriter::new(stdout.lock());
-                for line in results {
-                    if let Err(e) = writeln!(writer, "{}", line) {
-                        eprintln!("Error writing output: {}", e);
-                    }
-                }
-            }
-        }
-    });
+    let mut results = Vec::new();
     
     for line_result in reader.lines() {
         match line_result {
@@ -237,15 +205,21 @@ fn process_urls_streaming<R: BufRead>(config: &Config, reader: R) -> Result<(), 
                     continue;
                 }
                 
-                if config.custom {
+                if config.custom && !config.json {
                     if let Ok(output) = custom_format_url(&line, &config.format) {
                         if !output.is_empty() {
-                            let _ = tx.send(Some(output));
+                            println!("{}", output);
+                        }
+                    }
+                } else if config.custom && config.json {
+                    if let Ok(output) = custom_format_url(&line, &config.format) {
+                        if !output.is_empty() {
+                            results.push(output);
                         }
                     }
                 } else {
                     if let Some(result) = process_url(config, &line) {
-                        let _ = tx.send(Some(result));
+                        results.push(result);
                     }
                 }
             },
@@ -255,9 +229,22 @@ fn process_urls_streaming<R: BufRead>(config: &Config, reader: R) -> Result<(), 
         }
     }
     
-    let _ = tx.send(None);
-    
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    if !results.is_empty() || config.json {
+        if config.sort { results.sort(); }
+        if config.unique { results.dedup(); }
+        
+        if config.json {
+            output_json(&results)?;
+        } else {
+            let stdout = io::stdout();
+            let mut writer = BufWriter::new(stdout.lock());
+            for line in results {
+                if let Err(e) = writeln!(writer, "{}", line) {
+                    eprintln!("Error writing output: {}", e);
+                }
+            }
+        }
+    }
     
     Ok(())
 }
@@ -327,7 +314,7 @@ fn main() -> Result<(), AppError> {
     }
     
     if !config.urls.is_empty() {
-        if config.custom {
+        if config.custom && !config.json {
             config.urls.iter().for_each(|url_str| {
                 if let Ok(output) = custom_format_url(url_str, &config.format) {
                     if !output.is_empty() {
@@ -336,28 +323,31 @@ fn main() -> Result<(), AppError> {
                 }
             });
         } else {
-            let results = process_urls_parallel(&config, &config.urls);
-            let mut results = results;
+            let mut results = if config.custom {
+                config.urls.par_iter()
+                    .filter_map(|url_str| {
+                        if let Ok(output) = custom_format_url(url_str, &config.format) {
+                            if !output.is_empty() {
+                                return Some(output);
+                            }
+                        }
+                        None
+                    })
+                    .collect()
+            } else {
+                process_urls_parallel(&config, &config.urls)
+            };
+            
             if config.sort { results.sort(); }
             if config.unique { results.dedup(); }
             
-            match config.json {
-                true => {
-                    println!("{{");
-                    println!("\"urls\": [");
-                    for (i, url) in results.iter().enumerate() {
-                        if i > 0 { println!(","); }
-                        println!("\"{}\"", url);
-                    }
-                    println!("]");
-                    println!("}}");
-                },
-                _ => {
-                    let stdout = io::stdout();
-                    let mut writer = BufWriter::new(stdout.lock());
-                    for line in results {
-                        writeln!(writer, "{}", line)?;
-                    }
+            if config.json {
+                output_json(&results)?;
+            } else {
+                let stdout = io::stdout();
+                let mut writer = BufWriter::new(stdout.lock());
+                for line in results {
+                    writeln!(writer, "{}", line)?;
                 }
             }
         }
