@@ -1,9 +1,37 @@
 use atty::Stream;
 use clap::{Parser, ValueHint};
 use std::cell::RefCell;
+use std::fmt;
 use std::io::{self, BufRead, BufWriter, Write};
 use std::rc::Rc;
 use url::Url;
+
+#[derive(Debug)]
+enum AppError {
+    IoError(io::Error),
+    UrlParseError(url::ParseError),
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AppError::IoError(err) => write!(f, "IO error: {}", err),
+            AppError::UrlParseError(err) => write!(f, "URL parse error: {}", err),
+        }
+    }
+}
+
+impl From<io::Error> for AppError {
+    fn from(err: io::Error) -> Self {
+        AppError::IoError(err)
+    }
+}
+
+impl From<url::ParseError> for AppError {
+    fn from(err: url::ParseError) -> Self {
+        AppError::UrlParseError(err)
+    }
+}
 
 fn extract_domain(host: &str) -> String {
     let parts: Vec<&str> = host.split('.').collect();
@@ -19,7 +47,7 @@ fn extract_subdomain(host: &str) -> String {
     host.strip_suffix(&domain).unwrap_or(host).trim_end_matches('.').to_string()
 }
 
-fn process_urls(config: &Config, urls: &[String], res_vec: &Rc<RefCell<Vec<String>>>) {
+fn process_urls(config: &Config, urls: &[String], res_vec: &Rc<RefCell<Vec<String>>>) -> Result<(), AppError> {
     for url_str in urls {
         let url_with_scheme = if !url_str.contains("://") {
             format!("https://{}", url_str)
@@ -27,36 +55,40 @@ fn process_urls(config: &Config, urls: &[String], res_vec: &Rc<RefCell<Vec<Strin
             url_str.to_string()
         };
 
-        if let Ok(url) = Url::parse(&url_with_scheme) {
-            let mut parts = Vec::new();
+        match Url::parse(&url_with_scheme) {
+            Ok(url) => {
+                let mut parts = Vec::new();
 
-            if config.all || config.scheme { parts.push(url.scheme().to_string()); }
-            if config.all || config.username { parts.push(url.username().to_string()); }
-            if config.all || config.host { 
-                if let Some(host) = url.host_str() {
-                    parts.push(extract_subdomain(host));
+                if config.all || config.scheme { parts.push(url.scheme().to_string()); }
+                if config.all || config.username { parts.push(url.username().to_string()); }
+                if config.all || config.host { 
+                    if let Some(host) = url.host_str() {
+                        parts.push(extract_subdomain(host));
+                    }
                 }
-            }
-            if config.all || config.port { if let Some(port) = url.port() { parts.push(port.to_string()); } }
-            if config.all || config.path { parts.push(url.path().to_string()); }
-            if config.all || config.query { if let Some(query) = url.query() { parts.push(query.to_string()); } }
-            if config.all || config.fragment { if let Some(fragment) = url.fragment() { parts.push(fragment.to_string()); } }
-            if config.all || config.domain { 
-                if let Some(host) = url.host_str() {
-                    parts.push(extract_domain(host));
+                if config.all || config.port { if let Some(port) = url.port() { parts.push(port.to_string()); } }
+                if config.all || config.path { parts.push(url.path().to_string()); }
+                if config.all || config.query { if let Some(query) = url.query() { parts.push(query.to_string()); } }
+                if config.all || config.fragment { if let Some(fragment) = url.fragment() { parts.push(fragment.to_string()); } }
+                if config.all || config.domain { 
+                    if let Some(host) = url.host_str() {
+                        parts.push(extract_domain(host));
+                    }
                 }
-            }
 
-            if !parts.is_empty() {
-                res_vec.borrow_mut().push(parts.join("\t"));
+                if !parts.is_empty() {
+                    res_vec.borrow_mut().push(parts.join("\t"));
+                }
+            },
+            Err(err) => {
+                eprintln!("Error parsing URL '{}': {}", url_str, err);
             }
-        } else {
-            eprintln!("Error parsing URL: {}", url_str);
         }
     }
+    Ok(())
 }
 
-fn custom_output(urls: &[String], format: &str) {
+fn custom_output(urls: &[String], format: &str) -> Result<(), AppError> {
     for url_str in urls {
         let url_with_scheme = if !url_str.contains("://") {
             format!("https://{}", url_str)
@@ -64,23 +96,27 @@ fn custom_output(urls: &[String], format: &str) {
             url_str.to_string()
         };
 
-        if let Ok(url) = Url::parse(&url_with_scheme) {
-            let domain = url.host_str().map(extract_domain).unwrap_or_else(|| "N/A".to_string());
-            let host = url.host_str().map(extract_subdomain).unwrap_or_else(|| "N/A".to_string());
-            let output = format
-                .replace("{scheme}", url.scheme())
-                .replace("{username}", url.username())
-                .replace("{host}", &host)
-                .replace("{domain}", &domain)
-                .replace("{port}", &url.port().map_or("".to_string(), |p| p.to_string()))
-                .replace("{path}", url.path())
-                .replace("{query}", url.query().unwrap_or(""))
-                .replace("{fragment}", url.fragment().unwrap_or(""));
-            println!("{}", output);
-        } else {
-            eprintln!("Error parsing URL: {}", url_str);
+        match Url::parse(&url_with_scheme) {
+            Ok(url) => {
+                let domain = url.host_str().map(extract_domain).unwrap_or_else(|| "N/A".to_string());
+                let host = url.host_str().map(extract_subdomain).unwrap_or_else(|| "N/A".to_string());
+                let output = format
+                    .replace("{scheme}", url.scheme())
+                    .replace("{username}", url.username())
+                    .replace("{host}", &host)
+                    .replace("{domain}", &domain)
+                    .replace("{port}", &url.port().map_or("".to_string(), |p| p.to_string()))
+                    .replace("{path}", url.path())
+                    .replace("{query}", url.query().unwrap_or(""))
+                    .replace("{fragment}", url.fragment().unwrap_or(""));
+                println!("{}", output);
+            },
+            Err(err) => {
+                eprintln!("Error parsing URL '{}': {}", url_str, err);
+            }
         }
     }
+    Ok(())
 }
 
 #[derive(Debug, Parser)]
@@ -122,16 +158,17 @@ impl Config {
     fn from_args() -> Self { Self::parse() }
 }
 
-fn stdio_output(rvec: &Rc<RefCell<Vec<String>>>) {
+fn stdio_output(rvec: &Rc<RefCell<Vec<String>>>) -> Result<(), AppError> {
     let rv = rvec.borrow();
     let stdout = io::stdout();
     let mut writer = BufWriter::new(stdout.lock());
     for e in rv.iter() {
-        writeln!(writer, "{}", e).unwrap();
+        writeln!(writer, "{}", e)?;
     }
+    Ok(())
 }
 
-fn json_output(rvec: &Rc<RefCell<Vec<String>>>) {
+fn json_output(rvec: &Rc<RefCell<Vec<String>>>) -> Result<(), AppError> {
     let rv = rvec.borrow();
     println!("{{");
     println!("\"urls\": [");
@@ -141,30 +178,41 @@ fn json_output(rvec: &Rc<RefCell<Vec<String>>>) {
     }
     println!("]");
     println!("}}");
+    Ok(())
 }
 
-fn check_for_stdin() {
+fn check_for_stdin() -> Result<(), AppError> {
     if atty::is(Stream::Stdin) && Config::from_args().urls.is_empty() {
         eprintln!("Error: Not in stdin mode - switches ignored.");
         std::process::exit(1);
     }
+    Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), AppError> {
     let config = Config::parse();
-    check_for_stdin();
+    check_for_stdin()?;
+    
     let urls: Vec<String> = if !config.urls.is_empty() {
         config.urls.clone()
     } else {
-        io::stdin().lock().lines().map(|line| line.expect("Failed to read line from stdin")).collect()
+        io::stdin()
+            .lock()
+            .lines()
+            .map(|line| line.map_err(AppError::from))
+            .collect::<Result<Vec<String>, AppError>>()?
     };
+    
     let res_vec: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::with_capacity(urls.len())));
-    process_urls(&config, &urls, &res_vec);
+    process_urls(&config, &urls, &res_vec)?;
     if config.sort { res_vec.borrow_mut().sort(); }
     if config.unique { res_vec.borrow_mut().dedup(); }
+    
     match (config.json, config.custom) {
-        (true, _) => json_output(&res_vec),
-        (_, true) => custom_output(&urls, &config.format),
-        _ => stdio_output(&res_vec),
+        (true, _) => json_output(&res_vec)?,
+        (_, true) => custom_output(&urls, &config.format)?,
+        _ => stdio_output(&res_vec)?,
     }
+    
+    Ok(())
 }
