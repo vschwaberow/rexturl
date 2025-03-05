@@ -22,3 +22,4 @@ opt-level = "s"
 atty = "0.2.14"
 clap = { version = "4.5.4", features = ["cargo", "env", "derive"] }
 url = "2.3.1"
+rayon = "1.10.0"
