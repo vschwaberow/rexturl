@@ -5,10 +5,12 @@ A versatile command-line tool for parsing and manipulating URLs.
 ## Features
 
 - Extract specific URL components (scheme, username, host, port, path, query, fragment)
+- Extract domain and subdomain information
 - Custom output formatting
 - JSON output support
 - Sorting and deduplication of results
 - Process multiple URLs from command line or stdin
+- Automatic handling of URLs without schemes (defaults to https)
 
 ## Installation
 
@@ -85,26 +87,54 @@ If no URLs are provided, rexturl will read from stdin.
    echo -e "https://example.com\nhttps://example.com\nhttps://api.example.com" | rexturl --host --sort --unique
    ```
 
+## Domain and Subdomain Extraction
+
+`rexturl` includes special handling for domains and subdomains:
+
+- The `--domain` flag extracts the domain name from the URL, with proper handling of multi-part TLDs
+- When using `--host` alone (without other component flags), it extracts the subdomain by default
+- Multi-part TLDs like co.uk, org.uk, com.au, etc. are automatically detected
+
+Examples:
+
+```bash
+# Extract domain from a URL with multi-part TLD
+echo "https://blog.example.co.uk/posts" | rexturl --domain
+# Output: example.co.uk
+
+# Extract subdomain from a URL
+echo "https://blog.example.co.uk/posts" | rexturl --host
+# Output: blog
+
+# Extract subdomain and domain separately using custom format
+echo "https://blog.example.co.uk/posts" | rexturl --custom --format "Subdomain: {subdomain}, Domain: {domain}"
+# Output: Subdomain: blog, Domain: example.co.uk
+```
+
 ## Custom Output Format
 
 When using `--custom` and `--format`, you can use the following placeholders:
 
-- `{scheme}`
-- `{username}`
-- `{host}` 
-- `{domain}`
-- `{port}`
-- `{path}`
-- `{query}`
-- `{fragment}`
+- `{scheme}` - URL scheme (http, https, etc.)
+- `{username}` - Username portion of the URL 
+- `{host}` - Full hostname
+- `{hostname}` - Alias for host
+- `{subdomain}` - Subdomain portion (e.g., "www" in www.example.com)
+- `{domain}` - Domain name (e.g., "example.com")
+- `{port}` - Port number
+- `{path}` - URL path
+- `{query}` - Query string (without the leading ?)
+- `{fragment}` - Fragment identifier (without the leading #)
 
 Example:
 
 ```bash
-rexturl --custom --format "Host: {host}, Path: {path}" 
-https://example.com/api
+rexturl --custom --format "Host: {host}, Path: {path}" https://example.com/api
 ```
 
+```bash
+rexturl --custom --format "Subdomain: {subdomain}, Domain: {domain}" https://blog.example.co.uk/posts
+```
 
 ## Contributing
 
