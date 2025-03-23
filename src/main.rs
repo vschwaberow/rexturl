@@ -134,13 +134,38 @@ fn process_url(config: &Config, url_str: &str) -> Option<String> {
             let components = extract_url_components(&url);
             let mut parts = Vec::new();
 
+            if config.host && !config.all && !config.domain && !config.scheme && 
+               !config.username && !config.port && !config.path && 
+               !config.query && !config.fragment {
+                if !components.subdomain.is_empty() {
+                    return Some(components.subdomain);
+                }
+                return None;
+            }
+
             if config.all || config.scheme { parts.push(components.scheme); }
-            if config.all || config.username { parts.push(components.username); }
-            if config.all || config.host { parts.push(components.subdomain); }
-            if config.all || config.port { if !components.port.is_empty() { parts.push(components.port); } }
+            
+            if (config.all || config.username) && !components.username.is_empty() { 
+                parts.push(components.username); 
+            }
+            
+            if config.all || config.host { 
+                if config.host && !config.all {
+                    parts.push(components.subdomain); 
+                } else if config.all {
+                    parts.push(components.hostname);
+                }
+            }
+            
+            if (config.all || config.port) && !components.port.is_empty() { 
+                parts.push(components.port); 
+            }
+            
             if config.all || config.path { parts.push(components.path); }
-            if config.all || config.query { if !components.query.is_empty() { parts.push(components.query); } }
-            if config.all || config.fragment { if !components.fragment.is_empty() { parts.push(components.fragment); } }
+            
+            if (config.all || config.query) && !components.query.is_empty() { parts.push(components.query); }
+            if (config.all || config.fragment) && !components.fragment.is_empty() { parts.push(components.fragment); }
+            
             if config.all || config.domain { parts.push(components.domain); }
 
             if !parts.is_empty() {
@@ -186,8 +211,14 @@ fn process_urls_parallel(config: &Config, urls: &[String]) -> Vec<String> {
 }
 
 fn output_json(results: &[String]) -> Result<(), AppError> {
-    let output = UrlsOutput { 
-        urls: results.to_vec() 
+    let output = if results.iter().all(|s| !s.contains('\t')) && results.len() == 1 {
+        UrlsOutput { 
+            urls: results.to_vec() 
+        }
+    } else {
+        UrlsOutput { 
+            urls: results.to_vec() 
+        }
     };
     
     let json_string = serde_json::to_string_pretty(&output)?;
@@ -199,51 +230,173 @@ fn process_urls_streaming<R: BufRead>(config: &Config, reader: R) -> Result<(), 
     let mut results = Vec::new();
     
     for line_result in reader.lines() {
-        match line_result {
-            Ok(line) => {
-                if line.trim().is_empty() {
-                    continue;
-                }
-                
-                if config.custom && !config.json {
-                    if let Ok(output) = custom_format_url(&line, &config.format) {
-                        if !output.is_empty() {
-                            println!("{}", output);
+        if let Ok(line) = line_result {
+            let line = line.trim();
+            if !line.is_empty() {
+                if config.host && !config.all && !config.custom && !config.json && 
+                   !config.domain && !config.scheme && !config.username && !config.port && 
+                   !config.path && !config.query && !config.fragment {
+                    if let Ok(url) = parse_url(line) {
+                        if let Some(host_str) = url.host_str() {
+                            let subdomain = extract_subdomain(host_str);
+                            if !subdomain.is_empty() {
+                                results.push(subdomain);
+                            } else {
+                                results.push(host_str.to_string());
+                            }
                         }
                     }
-                } else if config.custom && config.json {
-                    if let Ok(output) = custom_format_url(&line, &config.format) {
+                } else if config.custom && !config.json {
+                    if let Ok(output) = custom_format_url(line, &config.format) {
                         if !output.is_empty() {
                             results.push(output);
                         }
                     }
                 } else {
-                    if let Some(result) = process_url(config, &line) {
+                    if let Some(result) = process_url(config, line) {
                         results.push(result);
                     }
                 }
-            },
-            Err(e) => {
-                eprintln!("Error reading line: {}", e);
             }
         }
     }
     
-    if !results.is_empty() || config.json {
-        if config.sort { results.sort(); }
-        if config.unique { results.dedup(); }
+    if config.sort { results.sort(); }
+    if config.unique { results.dedup(); }
+    
+    if config.json {
+        output_json(&results)?;
+    } else {
+        let stdout = io::stdout();
+        let mut writer = BufWriter::new(stdout.lock());
+        for result in results {
+            writeln!(writer, "{}", result)?;
+        }
+    }
+    
+    Ok(())
+}
+
+fn main() -> Result<(), AppError> {
+    let mut config = Config::parse();
+    
+    if config.urls.is_empty() {
+        check_for_stdin()?;
+    }
+    
+    if !config.format.is_empty() || config.custom {
+        config.custom = true;
+    }
+    
+    if config.host && !config.all && !config.custom && !config.urls.is_empty() && 
+       !config.domain && !config.scheme && !config.username && !config.port && 
+       !config.path && !config.query && !config.fragment {
+        let mut results = Vec::new();
         
-        if config.json {
-            output_json(&results)?;
-        } else {
-            let stdout = io::stdout();
-            let mut writer = BufWriter::new(stdout.lock());
-            for line in results {
-                if let Err(e) = writeln!(writer, "{}", line) {
-                    eprintln!("Error writing output: {}", e);
+        for url_str in &config.urls {
+            let url_str = url_str.trim();
+            if let Ok(url) = parse_url(url_str) {
+                if let Some(host) = url.host_str() {
+                    let subdomain = extract_subdomain(host);
+                    if !subdomain.is_empty() {
+                        results.push(subdomain);
+                    }
                 }
             }
         }
+        
+        if config.sort { results.sort(); }
+        if config.unique { results.dedup(); }
+        
+        let stdout = io::stdout();
+        let mut writer = BufWriter::new(stdout.lock());
+        for result in results {
+            writeln!(writer, "{}", result)?;
+        }
+        
+        return Ok(());
+    }
+    
+    if config.all && !config.urls.is_empty() {
+        for url_str in &config.urls {
+            let url_str = url_str.trim();
+            if let Ok(url) = parse_url(url_str) {
+                let components = extract_url_components(&url);
+                
+                let mut parts = Vec::new();
+                parts.push(components.scheme);
+                
+                if !components.username.is_empty() {
+                    parts.push(components.username);
+                }
+                
+                parts.push(components.hostname);
+                
+                if !components.port.is_empty() {
+                    parts.push(components.port);
+                }
+                
+                parts.push(components.path);
+                
+                if !components.query.is_empty() {
+                    parts.push(components.query);
+                }
+                
+                if !components.fragment.is_empty() {
+                    parts.push(components.fragment);
+                }
+                
+                parts.push(components.domain);
+                
+                println!("{}", parts.join("\t"));
+            }
+        }
+        return Ok(());
+    }
+    
+    if !config.urls.is_empty() {
+        if config.custom && !config.json {
+            config.urls.iter().for_each(|url_str| {
+                let url_str = url_str.trim();
+                if let Ok(output) = custom_format_url(url_str, &config.format) {
+                    if !output.is_empty() {
+                        println!("{}", output);
+                    }
+                }
+            });
+        } else {
+            let mut results = if config.custom {
+                config.urls.par_iter()
+                    .filter_map(|url_str| {
+                        let url_str = url_str.trim();
+                        if let Ok(output) = custom_format_url(url_str, &config.format) {
+                            if !output.is_empty() {
+                                return Some(output);
+                            }
+                        }
+                        None
+                    })
+                    .collect()
+            } else {
+                process_urls_parallel(&config, &config.urls)
+            };
+            
+            if config.sort { results.sort(); }
+            if config.unique { results.dedup(); }
+            
+            if config.json {
+                output_json(&results)?;
+            } else {
+                let stdout = io::stdout();
+                let mut writer = BufWriter::new(stdout.lock());
+                for line in results {
+                    writeln!(writer, "{}", line)?;
+                }
+            }
+        }
+    } else {
+        let stdin = io::stdin();
+        process_urls_streaming(&config, stdin.lock())?;
     }
     
     Ok(())
@@ -302,59 +455,100 @@ fn check_for_stdin() -> Result<(), AppError> {
     Ok(())
 }
 
-fn main() -> Result<(), AppError> {
-    let mut config = Config::parse();
-    
-    if config.urls.is_empty() {
-        check_for_stdin()?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_domain_simple() {
+        assert_eq!(extract_domain("example.com"), "example.com");
+        assert_eq!(extract_domain("www.example.com"), "example.com");
+        assert_eq!(extract_domain("blog.example.com"), "example.com");
     }
-    
-    if !config.format.is_empty() || config.custom {
-        config.custom = true;
+
+    #[test]
+    fn test_extract_domain_multipart_tld() {
+        assert_eq!(extract_domain("example.co.uk"), "example.co.uk");
+        assert_eq!(extract_domain("www.example.co.uk"), "example.co.uk");
+        assert_eq!(extract_domain("blog.example.co.uk"), "example.co.uk");
     }
-    
-    if !config.urls.is_empty() {
-        if config.custom && !config.json {
-            config.urls.iter().for_each(|url_str| {
-                if let Ok(output) = custom_format_url(url_str, &config.format) {
-                    if !output.is_empty() {
-                        println!("{}", output);
-                    }
-                }
-            });
-        } else {
-            let mut results = if config.custom {
-                config.urls.par_iter()
-                    .filter_map(|url_str| {
-                        if let Ok(output) = custom_format_url(url_str, &config.format) {
-                            if !output.is_empty() {
-                                return Some(output);
-                            }
-                        }
-                        None
-                    })
-                    .collect()
-            } else {
-                process_urls_parallel(&config, &config.urls)
-            };
-            
-            if config.sort { results.sort(); }
-            if config.unique { results.dedup(); }
-            
-            if config.json {
-                output_json(&results)?;
-            } else {
-                let stdout = io::stdout();
-                let mut writer = BufWriter::new(stdout.lock());
-                for line in results {
-                    writeln!(writer, "{}", line)?;
-                }
-            }
-        }
-    } else {
-        let stdin = io::stdin();
-        process_urls_streaming(&config, stdin.lock())?;
+
+    #[test]
+    fn test_extract_subdomain() {
+        assert_eq!(extract_subdomain("example.com"), "");
+        assert_eq!(extract_subdomain("www.example.com"), "www");
+        assert_eq!(extract_subdomain("blog.example.com"), "blog");
+        assert_eq!(extract_subdomain("blog.dev.example.com"), "blog.dev");
     }
-    
-    Ok(())
+
+    #[test]
+    fn test_extract_subdomain_multipart_tld() {
+        assert_eq!(extract_subdomain("example.co.uk"), "");
+        assert_eq!(extract_subdomain("www.example.co.uk"), "www");
+        assert_eq!(extract_subdomain("blog.example.co.uk"), "blog");
+    }
+
+    #[test]
+    fn test_parse_url() {
+        assert!(parse_url("example.com").is_ok());
+        assert!(parse_url("https://example.com").is_ok());
+        assert!(parse_url("http://example.com").is_ok());
+        
+        let url = parse_url("example.com").unwrap();
+        assert_eq!(url.scheme(), "https");
+    }
+
+    #[test]
+    fn test_extract_url_components() {
+        let url = parse_url("https://user@www.example.co.uk:8080/path?query=value#fragment").unwrap();
+        let components = extract_url_components(&url);
+        
+        assert_eq!(components.scheme, "https");
+        assert_eq!(components.username, "user");
+        assert_eq!(components.hostname, "www.example.co.uk");
+        assert_eq!(components.subdomain, "www");
+        assert_eq!(components.domain, "example.co.uk");
+        assert_eq!(components.port, "8080");
+        assert_eq!(components.path, "/path");
+        assert_eq!(components.query, "query=value");
+        assert_eq!(components.fragment, "fragment");
+    }
+
+    #[test]
+    fn test_process_url() {
+        let mut config = Config::parse_from([""]);
+        config.host = true;
+        
+        let result = process_url(&config, "https://www.example.com");
+        assert_eq!(result, Some("www".to_string()));
+        
+        config.host = false;
+        config.domain = true;
+        let result = process_url(&config, "https://www.example.com");
+        assert_eq!(result, Some("example.com".to_string()));
+        
+        config.domain = false;
+        config.all = true;
+        let result = process_url(&config, "https://www.example.com");
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_custom_format_url() {
+        let format = "{scheme}://{host}{path}";
+        let result = custom_format_url("https://www.example.com/path", format).unwrap();
+        assert_eq!(result, "https://www.example.com/path");
+        
+        let format = "{scheme}://{subdomain}.{domain}{path}";
+        let result = custom_format_url("https://www.example.com/path", format).unwrap();
+        assert_eq!(result, "https://www.example.com/path");
+        
+        let format = "{scheme}://{hostname}{path}?{query}#{fragment}";
+        let result = custom_format_url("https://www.example.com/path?q=1#f", format).unwrap();
+        assert_eq!(result, "https://www.example.com/path?q=1#f");
+        
+        let format = "{scheme}://{username}@{subdomain}.{domain}:{port}{path}?{query}#{fragment}";
+        let result = custom_format_url("https://user@blog.example.com:8080/path?q=1#f", format).unwrap();
+        assert_eq!(result, "https://user@blog.example.com:8080/path?q=1#f");
+    }
 }
