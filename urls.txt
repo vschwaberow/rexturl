@@ -1,0 +1,2 @@
+https://example.com/api
+https://example.com/docs
