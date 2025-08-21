@@ -2,7 +2,7 @@ use clap::ValueEnum;
 use serde::Serialize;
 use std::str::FromStr;
 
-use crate::{parse_url, extract_url_components};
+use crate::{extract_url_components, parse_url};
 
 #[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
 pub enum EscapeMode {
@@ -62,7 +62,9 @@ impl FromStr for Format {
             "jsonl" => Ok(Format::Jsonl),
             "custom" => Ok(Format::Custom),
             "sql" => Ok(Format::Sql),
-            _ => Err(format!("Invalid format: {s}. Valid formats: plain, tsv, csv, json, jsonl, custom, sql")),
+            _ => Err(format!(
+                "Invalid format: {s}. Valid formats: plain, tsv, csv, json, jsonl, custom, sql"
+            )),
         }
     }
 }
@@ -126,7 +128,6 @@ impl UrlRecord {
             _ => None,
         }
     }
-
 }
 
 fn select_fields(record: &UrlRecord, fields: &[&str], null_value: &str) -> Vec<String> {
@@ -141,13 +142,7 @@ fn select_fields(record: &UrlRecord, fields: &[&str], null_value: &str) -> Vec<S
         .collect()
 }
 
-
-pub fn print_plain(
-    records: &[UrlRecord],
-    fields: &[&str],
-    null_value: &str,
-    no_newline: bool,
-) {
+pub fn print_plain(records: &[UrlRecord], fields: &[&str], null_value: &str, no_newline: bool) {
     for (i, record) in records.iter().enumerate() {
         let row = select_fields(record, fields, null_value);
         let line = row.join(" ");
@@ -200,7 +195,10 @@ pub fn print_json(
             let mut map = serde_json::Map::new();
             for field in fields {
                 if let Some(value) = record.get_field(field) {
-                    map.insert(field.to_string(), serde_json::Value::String(value.to_string()));
+                    map.insert(
+                        field.to_string(),
+                        serde_json::Value::String(value.to_string()),
+                    );
                 }
             }
             serde_json::Value::Object(map)
@@ -208,7 +206,7 @@ pub fn print_json(
         .collect();
 
     let wrapper = UrlsWrapper { urls };
-    
+
     let output = if pretty {
         serde_json::to_string_pretty(&wrapper)?
     } else {
@@ -233,7 +231,10 @@ pub fn print_jsonl(
         let mut map = serde_json::Map::new();
         for field in fields {
             if let Some(value) = record.get_field(field) {
-                map.insert(field.to_string(), serde_json::Value::String(value.to_string()));
+                map.insert(
+                    field.to_string(),
+                    serde_json::Value::String(value.to_string()),
+                );
             }
         }
 
@@ -255,17 +256,17 @@ pub fn print_custom(
     no_newline: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parsed_template = parse_template(template)?;
-    
+
     for (i, record) in records.iter().enumerate() {
         let output = render_template(&parsed_template, record, escape_mode);
-        
+
         if no_newline && i == records.len() - 1 {
             print!("{output}");
         } else {
             println!("{output}");
         }
     }
-    
+
     Ok(())
 }
 
@@ -280,22 +281,22 @@ pub fn print_sql(
     if fields.is_empty() {
         return Err("SQL format requires at least one field to be specified".into());
     }
-    
+
     if create_table {
         let create_sql = generate_create_table(table_name, fields, dialect);
         println!("{create_sql}");
     }
-    
+
     for (i, record) in records.iter().enumerate() {
         let insert_sql = generate_insert_statement(record, fields, table_name, dialect);
-        
+
         if no_newline && i == records.len() - 1 {
             print!("{insert_sql}");
         } else {
             println!("{insert_sql}");
         }
     }
-    
+
     Ok(())
 }
 
@@ -313,7 +314,7 @@ fn parse_template(template: &str) -> Result<Vec<TemplateToken>, Box<dyn std::err
     let mut tokens = Vec::new();
     let mut current_text = String::new();
     let mut chars = template.chars().peekable();
-    
+
     while let Some(ch) = chars.next() {
         if ch == '{' {
             if !current_text.is_empty() {
@@ -327,10 +328,10 @@ fn parse_template(template: &str) -> Result<Vec<TemplateToken>, Box<dyn std::err
                 });
                 current_text.clear();
             }
-            
+
             let mut field_spec = String::new();
             let mut brace_count = 1;
-            
+
             while let Some(ch) = chars.next() {
                 if ch == '{' {
                     brace_count += 1;
@@ -345,14 +346,14 @@ fn parse_template(template: &str) -> Result<Vec<TemplateToken>, Box<dyn std::err
                     field_spec.push(ch);
                 }
             }
-            
+
             let token = parse_field_spec(&field_spec)?;
             tokens.push(token);
         } else {
             current_text.push(ch);
         }
     }
-    
+
     if !current_text.is_empty() {
         tokens.push(TemplateToken {
             text: current_text,
@@ -363,7 +364,7 @@ fn parse_template(template: &str) -> Result<Vec<TemplateToken>, Box<dyn std::err
             conditional_missing: None,
         });
     }
-    
+
     Ok(tokens)
 }
 
@@ -372,7 +373,7 @@ fn parse_field_spec(spec: &str) -> Result<TemplateToken, Box<dyn std::error::Err
     let mut default_value = None;
     let mut conditional_present = None;
     let mut conditional_missing = None;
-    
+
     if let Some((field_part, rest)) = spec.split_once(':') {
         field_name = field_part.to_string();
         default_value = Some(rest.to_string());
@@ -385,11 +386,11 @@ fn parse_field_spec(spec: &str) -> Result<TemplateToken, Box<dyn std::error::Err
     } else {
         field_name = spec.to_string();
     }
-    
+
     if !is_valid_field_name(&field_name) {
         return Err(format!("Invalid field name: {field_name}").into());
     }
-    
+
     Ok(TemplateToken {
         text: String::new(),
         is_field: true,
@@ -401,17 +402,34 @@ fn parse_field_spec(spec: &str) -> Result<TemplateToken, Box<dyn std::error::Err
 }
 
 fn is_valid_field_name(name: &str) -> bool {
-    matches!(name, "url" | "scheme" | "username" | "host" | "hostname" | "subdomain" | "domain" | "port" | "path" | "query" | "fragment")
+    matches!(
+        name,
+        "url"
+            | "scheme"
+            | "username"
+            | "host"
+            | "hostname"
+            | "subdomain"
+            | "domain"
+            | "port"
+            | "path"
+            | "query"
+            | "fragment"
+    )
 }
 
-fn render_template(tokens: &[TemplateToken], record: &UrlRecord, escape_mode: EscapeMode) -> String {
+fn render_template(
+    tokens: &[TemplateToken],
+    record: &UrlRecord,
+    escape_mode: EscapeMode,
+) -> String {
     let mut output = String::new();
-    
+
     for token in tokens {
         if token.is_field {
             if let Some(field_name) = &token.field_name {
                 let field_value = record.get_field(field_name);
-                
+
                 if let Some(value) = field_value {
                     if let Some(conditional_text) = &token.conditional_present {
                         output.push_str(conditional_text);
@@ -430,7 +448,7 @@ fn render_template(tokens: &[TemplateToken], record: &UrlRecord, escape_mode: Es
             output.push_str(&token.text);
         }
     }
-    
+
     output
 }
 
@@ -445,7 +463,10 @@ fn escape_value(value: &str, mode: EscapeMode) -> String {
 }
 
 fn shell_escape(value: &str) -> String {
-    if value.chars().any(|c| " \t\n\r\"'\\$`(){}[]|&;<>".contains(c)) {
+    if value
+        .chars()
+        .any(|c| " \t\n\r\"'\\$`(){}[]|&;<>".contains(c))
+    {
         format!("'{}'", value.replace('\'', "'\"'\"'"))
     } else {
         value.to_string()
@@ -471,7 +492,7 @@ fn sql_escape(value: &str) -> String {
 fn generate_create_table(table_name: &str, fields: &[&str], dialect: SqlDialect) -> String {
     let mut sql = format!("CREATE TABLE IF NOT EXISTS {} (\n", table_name);
     sql.push_str("    id SERIAL PRIMARY KEY,\n");
-    
+
     for field in fields {
         let column_type = match dialect {
             SqlDialect::Postgres => get_postgres_column_type(field),
@@ -479,13 +500,13 @@ fn generate_create_table(table_name: &str, fields: &[&str], dialect: SqlDialect)
             SqlDialect::Sqlite => get_sqlite_column_type(field),
             SqlDialect::Generic => get_generic_column_type(field),
         };
-        
+
         sql.push_str(&format!("    {} {},\n", field, column_type));
     }
-    
+
     sql.push_str("    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n");
     sql.push_str(");");
-    
+
     sql
 }
 
@@ -531,9 +552,15 @@ fn get_generic_column_type(field: &str) -> &'static str {
     }
 }
 
-fn generate_insert_statement(record: &UrlRecord, fields: &[&str], table_name: &str, _dialect: SqlDialect) -> String {
+fn generate_insert_statement(
+    record: &UrlRecord,
+    fields: &[&str],
+    table_name: &str,
+    _dialect: SqlDialect,
+) -> String {
     let field_names = fields.join(", ");
-    let values: Vec<String> = fields.iter()
+    let values: Vec<String> = fields
+        .iter()
         .map(|field| {
             if let Some(value) = record.get_field(field) {
                 sql_escape(value)
@@ -542,24 +569,33 @@ fn generate_insert_statement(record: &UrlRecord, fields: &[&str], table_name: &s
             }
         })
         .collect();
-    
-    format!("INSERT INTO {} ({}) VALUES ({});", table_name, field_names, values.join(", "))
+
+    format!(
+        "INSERT INTO {} ({}) VALUES ({});",
+        table_name,
+        field_names,
+        values.join(", ")
+    )
 }
 
 pub fn to_record(input: &str) -> Result<UrlRecord, crate::UrlParseError> {
     let url = parse_url(input)?;
     let components = extract_url_components(&url);
-    
+
     fn non_empty_string(s: String) -> Option<String> {
-        if s.is_empty() { None } else { Some(s) }
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
     }
-    
+
     let path = if components.path.is_empty() || components.path == "/" {
         Some("/".to_string())
     } else {
         Some(components.path)
     };
-    
+
     Ok(UrlRecord {
         url: Some(input.to_string()),
         scheme: non_empty_string(components.scheme),
@@ -574,7 +610,6 @@ pub fn to_record(input: &str) -> Result<UrlRecord, crate::UrlParseError> {
         fragment: non_empty_string(components.fragment),
     })
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -646,16 +681,16 @@ mod tests {
         let template = "{scheme}://{domain}{path}";
         let tokens = parse_template(template).unwrap();
         assert_eq!(tokens.len(), 4);
-        
+
         assert!(tokens[0].is_field);
         assert_eq!(tokens[0].field_name, Some("scheme".to_string()));
-        
+
         assert!(!tokens[1].is_field);
         assert_eq!(tokens[1].text, "://");
-        
+
         assert!(tokens[2].is_field);
         assert_eq!(tokens[2].field_name, Some("domain".to_string()));
-        
+
         assert!(tokens[3].is_field);
         assert_eq!(tokens[3].field_name, Some("path".to_string()));
     }
@@ -665,7 +700,7 @@ mod tests {
         let template = "{port:80}";
         let tokens = parse_template(template).unwrap();
         assert_eq!(tokens.len(), 1);
-        
+
         assert!(tokens[0].is_field);
         assert_eq!(tokens[0].field_name, Some("port".to_string()));
         assert_eq!(tokens[0].default_value, Some("80".to_string()));
@@ -676,7 +711,7 @@ mod tests {
         let template = "{query?&found}";
         let tokens = parse_template(template).unwrap();
         assert_eq!(tokens.len(), 1);
-        
+
         assert!(tokens[0].is_field);
         assert_eq!(tokens[0].field_name, Some("query".to_string()));
         assert_eq!(tokens[0].conditional_present, Some("&found".to_string()));
@@ -714,7 +749,7 @@ mod tests {
         let tokens = parse_template(template).unwrap();
         let result = render_template(&tokens, &record, EscapeMode::None);
         assert_eq!(result, "&found");
-        
+
         let record_no_query = create_test_record();
         let result2 = render_template(&tokens, &record_no_query, EscapeMode::None);
         assert_eq!(result2, "");
@@ -746,7 +781,7 @@ mod tests {
     fn test_generate_create_table() {
         let fields = vec!["domain", "path", "port"];
         let sql = generate_create_table("test_table", &fields, SqlDialect::Postgres);
-        
+
         assert!(sql.contains("CREATE TABLE IF NOT EXISTS test_table"));
         assert!(sql.contains("domain VARCHAR(253)"));
         assert!(sql.contains("path TEXT"));
@@ -759,8 +794,11 @@ mod tests {
         let record = create_test_record();
         let fields = vec!["domain", "path", "port"];
         let sql = generate_insert_statement(&record, &fields, "test_table", SqlDialect::Postgres);
-        
-        assert_eq!(sql, "INSERT INTO test_table (domain, path, port) VALUES ('example.com', '/path', NULL);");
+
+        assert_eq!(
+            sql,
+            "INSERT INTO test_table (domain, path, port) VALUES ('example.com', '/path', NULL);"
+        );
     }
 
     #[test]

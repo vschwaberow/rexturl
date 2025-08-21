@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-08-21
+
+### Security
+- Replaced deprecated `atty` dependency with `std::io::IsTerminal` to address CVE security vulnerability
+  - Fixes potential unaligned read issue on Windows platforms
+  - Eliminates dependency on unmaintained crate (last release 3 years ago)
+  - Uses Rust standard library alternative available since Rust 1.70.0
+
+### Changed
+- Terminal detection now uses `std::io::stdin().is_terminal()` instead of `atty::is(Stream::Stdin)`
+- Reduced dependency tree by removing external `atty` crate
+
 ## [0.4.0] - 2025-08-20
 
 ### Changed
@@ -144,6 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for extracting scheme, host, port, path, and query components
 - Stdin input support for processing multiple URLs
 
+[0.4.1]: https://github.com/vschwaberow/rexturl/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/vschwaberow/rexturl/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/vschwaberow/rexturl/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/vschwaberow/rexturl/compare/v0.3.1...v0.3.2

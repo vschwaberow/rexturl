@@ -14,7 +14,7 @@ fn create_url_file(urls: &[&str]) -> NamedTempFile {
 #[test]
 fn test_new_format_plain() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.arg("--urls")
         .arg("https://www.example.com/path")
         .arg("--fields")
@@ -30,7 +30,7 @@ fn test_new_format_plain() {
 #[test]
 fn test_new_format_tsv_with_header() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.arg("--urls")
         .arg("https://www.example.com/path")
         .arg("--fields")
@@ -48,7 +48,7 @@ fn test_new_format_tsv_with_header() {
 #[test]
 fn test_new_format_csv() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.arg("--urls")
         .arg("https://www.example.com/path")
         .arg("--fields")
@@ -66,7 +66,7 @@ fn test_new_format_csv() {
 #[test]
 fn test_new_format_json() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.arg("--urls")
         .arg("https://www.example.com/path")
         .arg("--fields")
@@ -74,9 +74,9 @@ fn test_new_format_json() {
         .arg("--format")
         .arg("json");
 
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains(r#"{"urls":[{"domain":"example.com"}]}"#));
+    cmd.assert().success().stdout(predicate::str::contains(
+        r#"{"urls":[{"domain":"example.com"}]}"#,
+    ));
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn test_new_format_jsonl() {
     let file = create_url_file(&urls);
 
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.pipe_stdin(file.path())
         .unwrap()
         .arg("--fields")
@@ -102,7 +102,7 @@ fn test_new_format_jsonl() {
 #[test]
 fn test_fields_auto_detection() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.arg("--urls")
         .arg("https://www.example.com/path")
         .arg("--domain")
@@ -116,21 +116,21 @@ fn test_fields_auto_detection() {
 #[test]
 fn test_backward_compatibility_json() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.arg("--urls")
         .arg("https://www.example.com")
         .arg("--domain")
         .arg("--json");
 
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains(r#"{"urls":[{"domain":"example.com"}]}"#));
+    cmd.assert().success().stdout(predicate::str::contains(
+        r#"{"urls":[{"domain":"example.com"}]}"#,
+    ));
 }
 
 #[test]
 fn test_null_empty_values() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.arg("--urls")
         .arg("https://example.com")
         .arg("--fields")
@@ -147,11 +147,15 @@ fn test_null_empty_values() {
 
 #[test]
 fn test_sort_and_unique() {
-    let urls = ["https://b.example.com", "https://a.example.com", "https://b.example.com"];
+    let urls = [
+        "https://b.example.com",
+        "https://a.example.com",
+        "https://b.example.com",
+    ];
     let file = create_url_file(&urls);
 
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.pipe_stdin(file.path())
         .unwrap()
         .arg("--fields")
@@ -162,7 +166,7 @@ fn test_sort_and_unique() {
     let output = cmd.output().unwrap();
     let output_str = String::from_utf8_lossy(&output.stdout);
     let lines: Vec<_> = output_str.lines().filter(|l| !l.is_empty()).collect();
-    
+
     assert_eq!(lines.len(), 2);
     assert_eq!(lines[0], "a");
     assert_eq!(lines[1], "b");
@@ -171,22 +175,20 @@ fn test_sort_and_unique() {
 #[test]
 fn test_strict_mode() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.arg("--urls")
         .arg("not-a-url")
         .arg("--strict")
         .arg("--fields")
         .arg("domain");
 
-    cmd.assert()
-        .failure()
-        .code(2);
+    cmd.assert().failure().code(2);
 }
 
 #[test]
 fn test_no_newline() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.arg("--urls")
         .arg("https://example.com")
         .arg("--fields")
@@ -195,7 +197,7 @@ fn test_no_newline() {
 
     let output = cmd.output().unwrap();
     let output_str = String::from_utf8_lossy(&output.stdout);
-    
+
     assert!(!output_str.ends_with('\n'));
     assert_eq!(output_str, "example.com");
 }
@@ -203,7 +205,7 @@ fn test_no_newline() {
 #[test]
 fn test_complex_multipart_tld() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
-    
+
     cmd.arg("--urls")
         .arg("https://blog.example.co.uk/posts")
         .arg("--fields")

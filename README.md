@@ -1,6 +1,6 @@
 # rexturl
 
-[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](https://github.com/vschwaberow/rexturl/releases/tag/v0.4.0)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](https://github.com/vschwaberow/rexturl/releases/tag/v0.4.1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org/)
 

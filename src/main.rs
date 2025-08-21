@@ -2,7 +2,10 @@ use clap::Parser;
 use std::io::{self, BufRead};
 use std::process;
 
-use rexturl::formatter::{to_record, print_plain, print_tabular, print_json, print_jsonl, print_custom, print_sql, Format, UrlRecord};
+use rexturl::formatter::{
+    print_custom, print_json, print_jsonl, print_plain, print_sql, print_tabular, to_record,
+    Format, UrlRecord,
+};
 use rexturl::{check_for_stdin, AppError, Config};
 
 fn main() -> Result<(), AppError> {
@@ -23,18 +26,44 @@ fn main() -> Result<(), AppError> {
         fields_str.split(',').map(|s| s.trim()).collect()
     } else if config.all {
         eprintln!("Warning: --all is deprecated, use --fields with specific field names");
-        vec!["scheme", "username", "subdomain", "hostname", "port", "path", "query", "fragment", "domain"]
+        vec![
+            "scheme",
+            "username",
+            "subdomain",
+            "hostname",
+            "port",
+            "path",
+            "query",
+            "fragment",
+            "domain",
+        ]
     } else {
         let mut auto_fields = Vec::new();
-        if config.scheme { auto_fields.push("scheme"); }
-        if config.username { auto_fields.push("username"); }
-        if config.host { auto_fields.push("subdomain"); }
-        if config.port { auto_fields.push("port"); }
-        if config.path { auto_fields.push("path"); }
-        if config.query { auto_fields.push("query"); }
-        if config.fragment { auto_fields.push("fragment"); }
-        if config.domain { auto_fields.push("domain"); }
-        
+        if config.scheme {
+            auto_fields.push("scheme");
+        }
+        if config.username {
+            auto_fields.push("username");
+        }
+        if config.host {
+            auto_fields.push("subdomain");
+        }
+        if config.port {
+            auto_fields.push("port");
+        }
+        if config.path {
+            auto_fields.push("path");
+        }
+        if config.query {
+            auto_fields.push("query");
+        }
+        if config.fragment {
+            auto_fields.push("fragment");
+        }
+        if config.domain {
+            auto_fields.push("domain");
+        }
+
         if auto_fields.is_empty() {
             auto_fields.push("url");
         }
@@ -81,7 +110,8 @@ fn main() -> Result<(), AppError> {
     if config.unique {
         let mut seen = std::collections::HashSet::new();
         records.retain(|record| {
-            let key: Vec<String> = fields.iter()
+            let key: Vec<String> = fields
+                .iter()
                 .map(|field| record.get_field(field).unwrap_or("").to_string())
                 .collect();
             seen.insert(key)
@@ -90,8 +120,22 @@ fn main() -> Result<(), AppError> {
 
     match format {
         Format::Plain => print_plain(&records, &fields, &config.null_empty, config.no_newline),
-        Format::Tsv => print_tabular(&records, &fields, config.header, '\t', &config.null_empty, config.no_newline),
-        Format::Csv => print_tabular(&records, &fields, config.header, ',', &config.null_empty, config.no_newline),
+        Format::Tsv => print_tabular(
+            &records,
+            &fields,
+            config.header,
+            '\t',
+            &config.null_empty,
+            config.no_newline,
+        ),
+        Format::Csv => print_tabular(
+            &records,
+            &fields,
+            config.header,
+            ',',
+            &config.null_empty,
+            config.no_newline,
+        ),
         Format::Json => {
             if let Err(e) = print_json(&records, &fields, config.pretty, config.no_newline) {
                 eprintln!("Error: Failed to serialize JSON: {e}");
