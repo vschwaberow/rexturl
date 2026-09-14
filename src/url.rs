@@ -794,10 +794,9 @@ impl Url {
                 return None;
             }
             let digit = (byte - b'0') as u16;
-            if let Some(new_result) = result.checked_mul(10).and_then(|r| r.checked_add(digit)) {
+            {
+                let new_result = result.checked_mul(10).and_then(|r| r.checked_add(digit))?;
                 result = new_result;
-            } else {
-                return None;
             }
         }
 

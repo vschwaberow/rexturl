@@ -44,7 +44,7 @@ fn bench_url_record_creation(c: &mut Criterion) {
         b.iter(|| {
             for url in test_urls.iter() {
                 let record = black_box(to_record(url));
-                black_box(record);
+                let _ = black_box(record);
             }
         })
     });

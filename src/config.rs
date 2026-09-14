@@ -5,17 +5,14 @@ use crate::error::AppError;
 use crate::formatter::{EscapeMode, Format, SqlDialect};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Default)]
 pub enum ColorMode {
+    #[default]
     Auto,
     Never,
     Always,
 }
 
-impl Default for ColorMode {
-    fn default() -> Self {
-        ColorMode::Auto
-    }
-}
 
 #[derive(Debug, Parser, Clone)]
 #[command(author, version, about = "A tool for parsing and manipulating URLs", long_about = None)]
