@@ -1,0 +1,62 @@
+name: Release
+
+permissions:
+  contents: read
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to upload binaries to (e.g. v0.5.0)
+        required: true
+        type: string
+
+jobs:
+  upload-assets:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    steps:
+      - name: Resolve checkout ref
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "checkout_ref=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "upload_ref=refs/tags/${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "checkout_ref=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+            echo "upload_ref=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.meta.outputs.checkout_ref }}
+
+      - uses: taiki-e/install-action@v2
+        if: contains(matrix.target, '-musl')
+        with:
+          tool: cross
+
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: rexturl
+          target: ${{ matrix.target }}
+          tar: unix
+          zip: windows
+          include: LICENSE,README.md,CHANGELOG.md
+          ref: ${{ steps.meta.outputs.upload_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}

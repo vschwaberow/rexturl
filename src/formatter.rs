@@ -4,8 +4,9 @@ use std::str::FromStr;
 
 use crate::{extract_url_components, parse_url};
 
-#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum, Default)]
 pub enum EscapeMode {
+    #[default]
     None,
     Shell,
     Csv,
@@ -13,28 +14,18 @@ pub enum EscapeMode {
     Sql,
 }
 
-impl Default for EscapeMode {
-    fn default() -> Self {
-        EscapeMode::None
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum, Default)]
 pub enum SqlDialect {
+    #[default]
     Postgres,
     Mysql,
     Sqlite,
     Generic,
 }
 
-impl Default for SqlDialect {
-    fn default() -> Self {
-        SqlDialect::Postgres
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum, Default)]
 pub enum Format {
+    #[default]
     Plain,
     Tsv,
     Csv,
@@ -42,12 +33,6 @@ pub enum Format {
     Jsonl,
     Custom,
     Sql,
-}
-
-impl Default for Format {
-    fn default() -> Self {
-        Format::Plain
-    }
 }
 
 impl FromStr for Format {
@@ -93,6 +78,12 @@ pub struct UrlRecord {
     pub query: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fragment: Option<String>,
+}
+
+impl Default for UrlRecord {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl UrlRecord {
@@ -332,7 +323,7 @@ fn parse_template(template: &str) -> Result<Vec<TemplateToken>, Box<dyn std::err
             let mut field_spec = String::new();
             let mut brace_count = 1;
 
-            while let Some(ch) = chars.next() {
+            for ch in chars.by_ref() {
                 if ch == '{' {
                     brace_count += 1;
                     field_spec.push(ch);
