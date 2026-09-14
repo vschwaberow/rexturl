@@ -1,4 +1,5 @@
 use clap::Parser;
+use rayon::prelude::*;
 use std::io::{self, BufRead};
 use std::process;
 
@@ -74,19 +75,26 @@ fn main() -> Result<(), AppError> {
         config.urls
     } else {
         let stdin = io::stdin();
-        stdin.lock().lines().filter_map(|line| line.ok()).collect()
+        stdin.lock().lines().map_while(Result::ok).collect()
     };
 
-    let mut records: Vec<UrlRecord> = Vec::new();
+    let parse_results: Vec<(String, Result<UrlRecord, _>)> = input_urls
+        .par_iter()
+        .filter_map(|url_str| {
+            let trimmed = url_str.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some((trimmed.to_string(), to_record(trimmed)))
+            }
+        })
+        .collect();
+
+    let mut records: Vec<UrlRecord> = Vec::with_capacity(parse_results.len());
     let mut parse_errors = 0;
 
-    for url_str in input_urls {
-        let url_str = url_str.trim();
-        if url_str.is_empty() {
-            continue;
-        }
-
-        match to_record(url_str) {
+    for (url_str, result) in parse_results {
+        match result {
             Ok(record) => records.push(record),
             Err(_) => {
                 parse_errors += 1;

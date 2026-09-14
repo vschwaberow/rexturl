@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rexturl::formatter::{UrlRecord, to_record};
+use rexturl::formatter::{to_record, UrlRecord};
 
 fn create_test_records(count: usize) -> Vec<UrlRecord> {
     let test_urls = [
@@ -9,7 +9,7 @@ fn create_test_records(count: usize) -> Vec<UrlRecord> {
         "mongodb://user:password@cluster.mongodb.net:27017/database?ssl=true",
         "redis://localhost:6379/0",
     ];
-    
+
     (0..count)
         .map(|i| {
             let url = test_urls[i % test_urls.len()];
@@ -21,7 +21,7 @@ fn create_test_records(count: usize) -> Vec<UrlRecord> {
 fn bench_field_lookup(c: &mut Criterion) {
     let records = create_test_records(1000);
     let fields = vec!["scheme", "domain", "path", "query"];
-    
+
     c.bench_function("field_lookup", |b| {
         b.iter(|| {
             for record in &records {
@@ -39,7 +39,7 @@ fn bench_url_record_creation(c: &mut Criterion) {
         "https://api.github.com/repos/user/repo/releases/latest",
         "https://cdn.jsdelivr.net/npm/package@1.0.0/dist/bundle.js",
     ];
-    
+
     c.bench_function("url_record_creation", |b| {
         b.iter(|| {
             for url in test_urls.iter() {
