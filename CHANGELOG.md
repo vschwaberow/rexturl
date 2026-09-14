@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-14
+
+### Removed
+- Legacy library modules unused by the CLI path: `processor`, `output`, and `url_parser`
+- Public re-exports of `process_url`, `process_urls_parallel`, `process_urls_streaming`, `custom_format_url`, and `output_json`
+
+### Changed
+- **BREAKING** (library API): consumers must use `parser` / `formatter` instead of the removed modules
+- Schemeless inputs (e.g. `example.com`) default to `https://` in `parse_url`
+- Parallel URL parsing restored in `main` via rayon over `to_record`
+- `DEVELOPMENT.md` rewritten for the modular architecture and current CLI flags
+
 ## [0.4.1] - 2025-08-21
 
 ### Security

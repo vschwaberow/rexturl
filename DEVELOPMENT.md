@@ -4,7 +4,7 @@ This file provides development guidance and conventions for working with this re
 
 ## Project Overview
 
-rexturl is a command-line tool for parsing and manipulating URLs, written in Rust. It extracts URL components, handles domain/subdomain extraction with multi-part TLD support, and provides flexible output formatting including JSON.
+rexturl is a command-line tool for parsing and manipulating URLs, written in Rust. It extracts URL components, handles domain/subdomain extraction with multi-part TLD support, and provides flexible output formats (plain, tsv, csv, json, jsonl, custom, sql).
 
 ## Development Commands
 
@@ -31,58 +31,64 @@ cargo fmt
 ### Running the Tool
 ```bash
 # Run development version
-cargo run -- [OPTIONS] [URLS...]
+cargo run -- [OPTIONS]
 
 # Examples
-cargo run -- --host --port https://example.com:8080
-cargo run -- --json --all https://example.com
-echo "https://example.com" | cargo run -- --domain
+cargo run -- --urls "https://example.com:8080" --fields subdomain,port
+cargo run -- --urls "https://example.com" --format json --fields domain
+echo "https://example.com" | cargo run -- --fields domain
+echo "example.com" | cargo run -- --fields scheme,domain
 ```
 
 ## Architecture
 
-### Single-File Design
-The entire application logic is contained in `src/main.rs` with integration tests in `tests/integration_tests.rs`. This architectural choice keeps the codebase focused and simple.
+### Modular Design
+Library modules live under `src/`; `src/main.rs` is a thin CLI orchestrator.
 
-### Key Components
-- **Config struct**: Uses clap derive macros for CLI argument parsing
-- **URL Processing Pipeline**: Input → Parsing → Component Extraction → Formatting → Output
-- **Multi-part TLD Support**: Hardcoded list in `MULTI_PART_TLDS` constant handles complex domains like .co.uk, .com.au
-- **Parallel Processing**: Uses rayon for concurrent URL processing when handling multiple URLs
-- **Custom Formatting**: Template-based output with placeholder substitution
+| Module | Role |
+|--------|------|
+| `url` | Custom URL parser (`Url`, `UrlParseError`) |
+| `parser` | Component extraction (`UrlComponents`, schemeless → `https://`) |
+| `domain` | Registrable domain / subdomain with `MULTI_PART_TLDS` |
+| `formatter` | `UrlRecord`, templates, plain/tsv/csv/json/jsonl/custom/sql |
+| `config` | clap `Config` and stdin detection |
+| `error` | `AppError` |
 
-### Processing Modes
-- **Parallel Mode**: For multiple URLs from command line
-- **Streaming Mode**: Line-by-line processing for stdin input  
-- **Custom Format Mode**: Template-based output with placeholders like `{scheme}://{host}{path}`
-- **JSON Mode**: Structured output with serde serialization
+### URL Processing Pipeline
+Input (`--urls` or stdin) → parallel `to_record` (rayon) → optional sort/unique → format → stdout.
+
+### Key Behaviors
+- **Multi-part TLD Support**: `MULTI_PART_TLDS` in `domain.rs` (e.g. `.co.uk`, `.com.au`)
+- **Schemeless input**: `example.com` is parsed as `https://example.com`
+- **Parallel parsing**: rayon over the `to_record` step for bulk input
+- **Legacy CLI flags**: `--json`, `--all`, `--custom` remain but are deprecated; prefer `--format` / `--fields`
 
 ## Code Patterns
 
 ### Error Handling
-- Custom `AppError` enum with `From` trait implementations for io::Error, url::ParseError, and serde_json::Error
-- Result types used throughout for error propagation
+- `AppError` with `From` for `io::Error`, `UrlParseError`, and `serde_json::Error`
+- Results used for fallible paths; `--strict` exits with code 2 on parse failures
 
 ### Performance Optimizations
-- `BufWriter` for efficient output buffering
-- Parallel processing with rayon for multiple URLs
-- Release profile configured for size optimization (`opt-level = "s"`, LTO enabled)
+- Parallel `to_record` with rayon for multiple URLs
+- Release profile: `opt-level = "s"`, LTO, symbol stripping
 
 ### Domain/Subdomain Logic
-The domain extraction logic handles complex multi-part TLDs:
-- `extract_domain()` function identifies the registrable domain
-- `extract_subdomain()` isolates subdomain portions  
-- Special handling for TLDs like co.uk, org.uk, com.au, etc.
+- `extract_domain()` identifies the registrable domain
+- `extract_subdomain()` isolates subdomain portions
+- Special handling for TLDs like `co.uk`, `org.uk`, `com.au`
 
 ## Testing Strategy
 
-Integration tests use `assert_cmd` crate to test the CLI interface:
-- Various flag combinations and input methods
-- JSON output validation
+Integration tests use `assert_cmd` against the CLI:
+- Format and field combinations
+- JSON / custom template output
 - Multi-part TLD edge cases
-- Stdin processing with temporary files
+- Stdin processing
 
-When adding features, ensure integration tests cover new functionality and edge cases.
+Unit tests cover `parser`, `formatter`, `domain`, and the custom `url` parser.
+
+When adding features, cover new CLI paths in integration tests.
 
 ## Task Completion Checklist
 
@@ -91,4 +97,4 @@ Before completing any development task:
 2. Run `cargo fmt` to format code
 3. Run `cargo test` to ensure all tests pass
 4. Run `cargo build --release` to verify release build
-5. Test manually with key use cases, especially domain/subdomain extraction with complex TLDs
+5. Test manually with key use cases, especially domain/subdomain extraction with complex TLDs and schemeless input

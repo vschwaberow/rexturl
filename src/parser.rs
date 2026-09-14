@@ -15,7 +15,11 @@ pub struct UrlComponents {
 }
 
 pub fn parse_url(url_str: &str) -> Result<Url, UrlParseError> {
-    Url::parse(url_str)
+    if url_str.contains("://") {
+        Url::parse(url_str)
+    } else {
+        Url::parse(&format!("https://{url_str}"))
+    }
 }
 
 pub fn extract_url_components(url: &Url) -> UrlComponents {
@@ -167,5 +171,18 @@ mod tests {
 
         let components = parse_and_extract_components("https://example.com#").unwrap();
         assert_eq!(components.fragment, "");
+    }
+
+    #[test]
+    fn test_schemeless_defaults_to_https() {
+        let url = parse_url("example.com").unwrap();
+        assert_eq!(url.scheme(), "https");
+        assert_eq!(url.host(), "example.com");
+
+        let components = parse_and_extract_components("www.example.co.uk/path").unwrap();
+        assert_eq!(components.scheme, "https");
+        assert_eq!(components.subdomain, "www");
+        assert_eq!(components.domain, "example.co.uk");
+        assert_eq!(components.path, "/path");
     }
 }

@@ -177,7 +177,7 @@ fn test_strict_mode() {
     let mut cmd = Command::cargo_bin("rexturl").unwrap();
 
     cmd.arg("--urls")
-        .arg("not-a-url")
+        .arg("http://")
         .arg("--strict")
         .arg("--fields")
         .arg("domain");
