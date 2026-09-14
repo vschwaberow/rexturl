@@ -4,15 +4,13 @@ use std::io::IsTerminal;
 use crate::error::AppError;
 use crate::formatter::{EscapeMode, Format, SqlDialect};
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
 pub enum ColorMode {
     #[default]
     Auto,
     Never,
     Always,
 }
-
 
 #[derive(Debug, Parser, Clone)]
 #[command(author, version, about = "A tool for parsing and manipulating URLs", long_about = None)]

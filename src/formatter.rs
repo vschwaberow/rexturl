@@ -4,8 +4,7 @@ use std::str::FromStr;
 
 use crate::{extract_url_components, parse_url};
 
-#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum, Default)]
 pub enum EscapeMode {
     #[default]
     None,
@@ -15,9 +14,7 @@ pub enum EscapeMode {
     Sql,
 }
 
-
-#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum, Default)]
 pub enum SqlDialect {
     #[default]
     Postgres,
@@ -26,9 +23,7 @@ pub enum SqlDialect {
     Generic,
 }
 
-
-#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum, Default)]
 pub enum Format {
     #[default]
     Plain,
@@ -39,7 +34,6 @@ pub enum Format {
     Custom,
     Sql,
 }
-
 
 impl FromStr for Format {
     type Err = String;
